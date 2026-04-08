@@ -1,0 +1,26 @@
+{
+  "sessionCount": 105,
+  "lastSession": {
+    "startedAt": "2026-04-06T21:58:09.783Z",
+    "platform": "claude",
+    "level": "Starter"
+  },
+  "pdca": {
+    "nand-flash-application": {
+      "phase": "do",
+      "startedAt": "2026-02-24",
+      "planDocument": "docs/01-plan/features/nand-flash-application.plan.md",
+      "designDocument": "docs/02-design/features/nand-flash-application.design.md"
+    },
+    "mt29f2g-driver-bugfix": {
+      "phase": "do",
+      "startedAt": "2026-02-24",
+      "planDocument": "docs/01-plan/features/mt29f2g-driver-bugfix.plan.md"
+    },
+    "iot-data-storage-export": {
+      "phase": "plan",
+      "startedAt": "2026-02-25",
+      "planDocument": "docs/01-plan/features/iot-data-storage-export.plan.md"
+    }
+  }
+}
