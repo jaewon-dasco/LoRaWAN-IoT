@@ -1,0 +1,12 @@
+# STM32CubeIDE Build Output
+Debug/
+Release/
+
+# IDE Settings
+.settings/
+.project
+.cproject
+.mxproject
+
+# Claude Code
+.claude/
