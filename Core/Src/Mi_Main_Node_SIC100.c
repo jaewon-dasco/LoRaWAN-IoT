@@ -10,7 +10,7 @@
 #include "Mi_Storage.h"
 #include "Mi_Serial.h"
 
-#define SYSTEM_SUPPLY_LOW_LIMIT		3100
+#define SYSTEM_SUPPLY_LOW_LIMIT		3200
 #define RTC_SUPPLY_LOW_LIMIT		2100
 
 oIO_t DO_ADC_REF_EANBLE		= {DO_ADC_REF_ENABLE_GPIO_Port,		DO_ADC_REF_ENABLE_Pin,		IO_LOW};
@@ -30,6 +30,8 @@ oDebounce_t DebounceError	= DEBOUNCE_INITIALIZER(1000,300);
 
 oResult_t MiMain_GPIOControl()
 {
+	GPIOs.DO.OperatingLED = MiIoT_LED;
+
 	IO_WRITE(DO_LORA_ENABLE, GPIOs.DO.LoRaEnable);
 	IO_WRITE(DO_ADC_REF_EANBLE, GPIOs.DO.ADCRefEnable);
 	IO_WRITE(DO_NAND_ENABLE, GPIOs.DO.NANDEnable);
@@ -44,7 +46,7 @@ oResult_t MiMain_GPIOControl()
 	GPIOs.DI.UsbConnected = DB_USBConnected.Output || DB_USBConnected.Input;
 
 	uint32_t IORun = 0;
-	//IORun += GPIOs.DO.LoRaEnable;
+	IORun += GPIOs.DO.LoRaEnable && !MiLoRa_IsSleep;
 	IORun += GPIOs.DO.ADCRefEnable;
 	IORun += GPIOs.DO.NANDEnable;
 	IORun += GPIOs.DO.PwrEnable_U0;
@@ -54,25 +56,99 @@ oResult_t MiMain_GPIOControl()
 	IORun += GPIOs.DO.OperatingLED;
 	IORun += GPIOs.DI.UsbConnected;
 
-	GPIOs.DO.OperatingLED = MiIoT_LED;
-
 	return IORun ? RESULT_RUN : RESULT_ERROR;
 }
 
 void MiMain_GPIODeInit(void)
 {
-	memset(&GPIOs.DO, 0, sizeof(GPIOs.DO));
-	GPIOs.DO.LoRaEnable = 1;
+	GPIO_InitTypeDef cfg = {.Mode = GPIO_MODE_ANALOG, .Pull = GPIO_NOPULL};
+
+	if(!MiLoRa_IsSleep){
+		cfg.Pin = DO_LORA_ENABLE.Pin;
+		HAL_GPIO_Init(DO_LORA_ENABLE.Port, &cfg);
+	}
+
+	cfg.Pin = DO_NAND_ENABLE.Pin;
+	HAL_GPIO_Init(DO_NAND_ENABLE.Port, &cfg);
+	cfg.Pin = DO_ADC_REF_EANBLE.Pin;
+	HAL_GPIO_Init(DO_ADC_REF_EANBLE.Port, &cfg);
+	cfg.Pin = DO_POWEROUT_ENALBE0.Pin;
+	HAL_GPIO_Init(DO_POWEROUT_ENALBE0.Port, &cfg);
+	cfg.Pin = DO_POWEROUT_ENALBE1.Pin;
+	HAL_GPIO_Init(DO_POWEROUT_ENALBE1.Port, &cfg);
+	cfg.Pin = DO_PW_EXTCOM_Pin;
+	HAL_GPIO_Init(DO_PW_EXTCOM_GPIO_Port, &cfg);
+	cfg.Pin = DO_CAN_EANBLE.Pin;
+	HAL_GPIO_Init(DO_CAN_EANBLE.Port, &cfg);
+	cfg.Pin = DO_POWEROUT_SELECT.Pin;
+	HAL_GPIO_Init(DO_POWEROUT_SELECT.Port, &cfg);
+	cfg.Pin = DO_LED_OPERATING.Pin;
+	HAL_GPIO_Init(DO_LED_OPERATING.Port, &cfg);
+
+	cfg.Mode = GPIO_MODE_IT_RISING;
+	cfg.Pull = GPIO_PULLDOWN;
+	cfg.Pin = DI_USBC_CONNECTED_Pin;
+	HAL_GPIO_Init(DI_USBC_CONNECTED_GPIO_Port, &cfg);
+}
+
+void MiMain_GPIOInit(void)
+{
+	GPIO_InitTypeDef cfg = {.Speed = GPIO_SPEED_FREQ_LOW};
+
+	__HAL_RCC_GPIOC_CLK_ENABLE();
+	__HAL_RCC_GPIOH_CLK_ENABLE();
+	__HAL_RCC_GPIOA_CLK_ENABLE();
+	__HAL_RCC_GPIOB_CLK_ENABLE();
+	__HAL_RCC_GPIOD_CLK_ENABLE();
+
 	MiMain_GPIOControl();
-	memset(&GPIOs.DI, 0, sizeof(GPIOs.DI));
 
-	Native_DisableGPIOs(&DO_LORA_ENABLE, 3);
+	HAL_GPIO_WritePin(DO_PW_EXTCOM_GPIO_Port, DO_PW_EXTCOM_Pin, GPIO_PIN_SET);
 
-	GPIO_InitTypeDef GPIO_InitStruct = {0};
-	GPIO_InitStruct.Pin = DI_USBC_CONNECTED_Pin;
-	GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-	GPIO_InitStruct.Pull = GPIO_PULLDOWN;
-	HAL_GPIO_Init(DI_USBC_CONNECTED_GPIO_Port, &GPIO_InitStruct);
+	//OD outputs, NOPULL, LOW speed | LORA, NAND, ADC_REF, PWR_EN0, PWR_EN1, PW_EXTCOM
+	cfg.Mode  = GPIO_MODE_OUTPUT_OD;
+	cfg.Pull  = GPIO_NOPULL;
+	cfg.Speed = GPIO_SPEED_FREQ_LOW;
+
+	if(!MiLoRa_IsSleep){
+		cfg.Pin   = DO_LORA_ENABLE.Pin;
+		HAL_GPIO_Init(DO_LORA_ENABLE.Port, &cfg);
+	}
+
+	cfg.Pin   = DO_NAND_ENABLE.Pin;
+	HAL_GPIO_Init(DO_NAND_ENABLE.Port, &cfg);
+	cfg.Pin   = DO_ADC_REF_EANBLE.Pin;
+	HAL_GPIO_Init(DO_ADC_REF_EANBLE.Port, &cfg);
+	cfg.Pin   = DO_POWEROUT_ENALBE0.Pin;
+	HAL_GPIO_Init(DO_POWEROUT_ENALBE0.Port, &cfg);
+	cfg.Pin   = DO_POWEROUT_ENALBE1.Pin;
+	HAL_GPIO_Init(DO_POWEROUT_ENALBE1.Port, &cfg);
+	cfg.Pin   = DO_PW_EXTCOM_Pin;
+	HAL_GPIO_Init(DO_PW_EXTCOM_GPIO_Port, &cfg);
+
+	//PP outputs, PULLUP, LOW speed | CAN_ENABLE, POWEROUT_SELECT
+	cfg.Mode  = GPIO_MODE_OUTPUT_PP;
+	cfg.Pull  = GPIO_PULLUP;
+	cfg.Speed = GPIO_SPEED_FREQ_LOW;
+
+	cfg.Pin   = DO_CAN_EANBLE.Pin;
+	HAL_GPIO_Init(DO_CAN_EANBLE.Port, &cfg);
+	cfg.Pin   = DO_POWEROUT_SELECT.Pin;
+	HAL_GPIO_Init(DO_POWEROUT_SELECT.Port, &cfg);
+
+	//PP output, NOPULL, VERY_HIGH speed | OPERATING LED
+	cfg.Mode  = GPIO_MODE_OUTPUT_PP;
+	cfg.Pull  = GPIO_NOPULL;
+	cfg.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+
+	cfg.Pin   = DO_LED_OPERATING.Pin;
+	HAL_GPIO_Init(DO_LED_OPERATING.Port, &cfg);
+
+	HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
+	HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
+
+	HAL_ADC_DeInit(&hadc1);
+	HAL_ADC_Init(&hadc1);
 }
 
 IoT_DataPacket_t MiMain_GetStableData(IoT_DataPacket_t *pReference, IoT_DataPacket_t *pPast, IoT_DataPacket_t *pNew)
@@ -452,7 +528,7 @@ void MiMain (void)
 {
 	static uint8_t MiMainStep = 0;
 
-	Native_WatchDog(SECOND_TO_MS(11));
+	Native_WatchDog(MIIOT_SLEEP_TIME*2);
 
 	switch(MiMainStep)
 	{
@@ -461,7 +537,7 @@ void MiMain (void)
 			MiIoT_MeasurementCallback = MiMain_UpdateMeasure;
 			MiIoT_StatusCallback = MiMain_UpdateStatus;
 			MiIoT_IOControlCallback = MiMain_GPIOControl;
-			MiIoT_GPIOInitCallback = main_GPIOInit;
+			MiIoT_GPIOInitCallback = MiMain_GPIOInit;
 			MiIoT_GPIODeInitCallback = MiMain_GPIODeInit;
 
 			MiMainStep++;

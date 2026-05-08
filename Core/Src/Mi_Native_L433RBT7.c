@@ -97,6 +97,7 @@ oResult_t Native_FlashRead(uint8_t *pData, uint32_t SizeOfData)
 
     // Step 1: 임시 버퍼로 데이터 읽기
     if (Native_FlashReadAddress(Address, pData, SizeOfData, 1) != RESULT_OK) {
+    	memset(pData, 0, SizeOfData);
     	return RESULT_ERROR;
     }
 
@@ -311,7 +312,6 @@ oResult_t Native_ADCRead(uint32_t Channel, uint32_t SamplingTime, uint16_t *pDat
 {
 	oResult_t result = RESULT_RUN;
 #ifdef ADC_GET_RESOLUTION
-	static uint8_t CalibratedADC = 0;
 	static uint8_t ReadAdcStep = 0;
 	static uint32_t ErrorCount;
 	static uint32_t ReadCount;
@@ -333,15 +333,10 @@ oResult_t Native_ADCRead(uint32_t Channel, uint32_t SamplingTime, uint16_t *pDat
 			ReadAdcStep = 0;
 			break;
 		case 0:
+			HAL_ADC_Stop(&hadc1);
+	    	ReadAdcStep++;
 			ErrorCount = 0;
 			RecoveryAttempted = 0;
-			ReadAdcStep++;
-
-			if(!CalibratedADC){
-				HAL_ADC_Stop(&hadc1);
-				HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
-				CalibratedADC = 1;
-			}
 			break;
 		case 1:
 			HAL_ADC_Stop(&hadc1);

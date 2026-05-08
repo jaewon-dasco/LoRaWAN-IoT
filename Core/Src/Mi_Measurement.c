@@ -14,7 +14,9 @@
 #include "ONE_Math.h"
 #include "ONE_Memory.h"
 
-#define ADC_VREF						2800.0f //2.8Vdc
+/* VREFINT_CAL_ADDR / VREFINT_CAL_VREF 은 HAL (stm32l4xx_ll_adc.h)에서 제공 — VDDA=3.0V(=3000mV) 기준 공장 교정값 */
+
+#define ADC_VREF						(MiIoT_Parameter.SystemConfig.ActualVRef != 0 ? MiIoT_Parameter.SystemConfig.ActualVRef : g_VddaActual_mV)
 #define ADC_MAXDIGIT					4095.0f
 #define ADC_TO_AI(x)					((double)(x)/(double)ADC_MAXDIGIT*(double)ADC_VREF)
 #define ADC_TO_SUPPLY(x)				(ADC_TO_AI(x)/VOLT_DIV_RATIO(6980,20000))
@@ -26,6 +28,44 @@
 #define MEASURE_CAN_ERROR_MAXCOUNT		3
 
 GPIOs_t Measure_SupplyVolt;
+
+static uint32_t g_VddaActual_mV = 2800;	/* VREFINT 기반 동적 VDDA (mV), 갱신 전 기본 2.8V */
+
+oResult_t Measurement_CalibrateVDD(void)
+{
+	static uint8_t CalStep = 0;
+	uint16_t vrefint_raw;
+	oResult_t result = RESULT_RUN;
+
+	switch(CalStep)
+	{
+		case 0:
+			HAL_ADC_Stop(&hadc1);
+			if(HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED) == HAL_OK){
+				oSerial_Log("Mearment", "ADC offset calibrated");
+			}
+			CalStep++;
+			break;
+		case 1:
+			result = Native_ADCRead(ADC_CHANNEL_VREFINT, ADC_SAMPLETIME_640CYCLES_5, &vrefint_raw, 20);
+			if(result == RESULT_OK){
+				if(vrefint_raw > 0){
+					uint32_t vdda = ((uint32_t)VREFINT_CAL_VREF * (uint32_t)(*VREFINT_CAL_ADDR)) / vrefint_raw;
+					if(vdda >= 2000 && vdda <= 3600){
+						g_VddaActual_mV = vdda;
+					}
+				}
+				oSerial_Log("Mearment", "VrefCal VDDA=%lu mV (raw=%u cal=%u)", (unsigned long)g_VddaActual_mV, (unsigned int)vrefint_raw, (unsigned int)(*VREFINT_CAL_ADDR));
+			}
+			break;
+	}
+
+	if(result != RESULT_RUN){
+		CalStep = 0;
+	}
+
+	return result;
+}
 
 uint32_t Measure_ScanIdList[MEASUREMENT_NODE_MAXCOUNT];
 uint8_t Measure_Buffer[MIIOT_PAYLOAD_MAXSIZE];
@@ -722,6 +762,11 @@ oResult_t Measurement_Supply(uint8_t Count)
 			}
 			break;
 		case 3:
+			if(Measurement_CalibrateVDD() != RESULT_RUN){
+				ReadSupplyStep++;
+			}
+			break;
+		case 4:
 			switch(Native_ADCRead(ADC_CHANNEL_3, ADC_SAMPLETIME_640CYCLES_5, &Data, 25))
 			{
 				case RESULT_RUN:
@@ -736,7 +781,7 @@ oResult_t Measurement_Supply(uint8_t Count)
 					break;
 			}
 			break;
-		case 4:
+		case 5:
 			switch(Native_ADCRead(ADC_CHANNEL_VBAT, ADC_SAMPLETIME_640CYCLES_5, &Data, 25))
 			{
 				case RESULT_RUN:
@@ -750,7 +795,7 @@ oResult_t Measurement_Supply(uint8_t Count)
 					break;
 			}
 			break;
-		case 5:
+		case 6:
 			result = RESULT_OK;
 			break;
 	}

@@ -108,8 +108,6 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-  DBGMCU->CR &= ~DBGMCU_CR_DBG_STOP;    // 디버깅 중에도 STOP 모드 진입 허용
-  __HAL_DBGMCU_FREEZE_RTC();            // 디버깅 중에도 RTC 계속 동작
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -636,13 +634,7 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-void main_GPIOInit()
-{
-	HAL_ADC_DeInit(&hadc1);
 
-	MX_GPIO_Init();
-	MX_ADC1_Init();
-}
 /* USER CODE END 4 */
 
 /**

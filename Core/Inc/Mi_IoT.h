@@ -12,7 +12,8 @@
 #include "ONE_Signal.h"
 #include "Mi_Main.h"
 
-#define MIIOT_PAYLOAD_MAXSIZE	(MIIOT_IOTDATA_SIZE_DATAARRAY(70))
+#define MIIOT_SLEEP_TIME						SECOND_TO_MS(10)
+#define MIIOT_PAYLOAD_MAXSIZE					(MIIOT_IOTDATA_SIZE_DATAARRAY(70))
 
 //MailBox
 #define MIIOT_MAILBOX_INITIALIZER				{{0,0,{0,}},0,0,0,0,0}
@@ -396,7 +397,6 @@ extern VoidCallbackHandler_t MiIoT_GPIODeInitCallback;
 ///***************************************************************************************************************************
 // Variable
 //****************************************************************************************************************************
-extern oBlinker_t MiIoT_BlinkSleep;
 extern oBlinker_t MiIoT_BlinkIdle;
 extern oBlinker_t MiIoT_BlinkBusy;
 extern oDateAndTime_t MiIoT_MeasurementDT;

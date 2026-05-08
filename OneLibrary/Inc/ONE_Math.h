@@ -11,7 +11,6 @@
 #include "ONE_Common.h"
 
 #define MATH_PI 						3.14159265358979323846
-#define MOVEAVERAGE_MAX_DATACOUNT		1000
 
 #define MATH_ABS(x)							((x) < 0 ? -(x) : (x))
 #define MATH_MAX(a, b)						((a) > (b) ? (a) : (b))
@@ -40,55 +39,7 @@
 #define RTD_PT1000_TO_CELSIUS(R)	(((double)(R) - 1000.0) / (1000.0 * 0.00385))
 #define RTD_PT100_TO_CELSIUS(R)		(((double)(R) - 100.0) / 0.385)
 
-//Initializer define
-#define LOWPASSFILTER_INITIALIZER(cutoff_freq, sample_freq) { \
-    .SamplingFreq = sample_freq, \
-    .CutoffFreq = cutoff_freq, \
-	.Reset = 1, \
-}
-
-#define MOVEAVERAGE_INITIALIZER(buffer, sizeofbuffer, datatype) { \
-	.pBuffer = (uint8_t *)buffer,\
-	.LengthOfBuffer = MATH_MIN(sizeofbuffer / SIZE_OF_DATATYPE(datatype), MOVEAVERAGE_MAX_DATACOUNT),\
-	.MaxSumCount = MATH_MIN(sizeofbuffer / SIZE_OF_DATATYPE(datatype), MOVEAVERAGE_MAX_DATACOUNT),\
-	.CountOfData = 0,\
-	.DataType = datatype,\
-	.IndexOfData = 0,\
-	.SumOfData.d = 0,\
-	.IsFull = 0,\
-	.Reset = 1,\
-}
-
 #define RANGE_INITIALIZER()	{(double)(1.7976931348623157e+308), (double)(-1.7976931348623157e+308)}
-
-typedef struct{
-	uint8_t *pBuffer;
-	uint32_t IndexOfData;
-	uint32_t CountOfData;
-	uint32_t MaxSumCount;
-	uint32_t LengthOfBuffer;
-	oDataType_t DataType;
-
-	union {
-	    int64_t   s64;
-	    uint64_t  u64;
-	    float     f;
-	    double    d;
-	} SumOfData;
-
-	uint8_t Reset;
-	uint8_t IsFull;
-}oMoveAverage_t;
-
-typedef struct {
-	double SamplingFreq;
-	double CutoffFreq;
-
-	double alpha;
-	double output;
-
-	uint8_t Reset;
-}oLowPassFilter_t;
 
 typedef struct{
 	int32_t X;
@@ -122,12 +73,6 @@ typedef struct{
 	double Roll;
 	double Yaw;
 }oRPY_t;
-
-extern uint8_t oMoveAverage_SetData(oMoveAverage_t *pAverage, void *pData);
-extern uint8_t oMoveAverage_GetData(oMoveAverage_t *pAverage, void *pData);
-extern oRange_t oMoveAverage_GetRange(oMoveAverage_t *pAvg);
-
-extern double oLowPassFilter(oLowPassFilter_t *pFilter, double input);
 
 extern oRPY_t oMath_AccelationToRPY(oVector3_t Acc);
 extern double oMath_Polynomial(double InData, double Polynomial[], uint8_t NumberOfPolynomial);

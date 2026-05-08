@@ -96,7 +96,7 @@ void Error_Handler(void);
 #define DO_POWEROUT_ENABLE_1_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
-void main_GPIOInit();
+
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

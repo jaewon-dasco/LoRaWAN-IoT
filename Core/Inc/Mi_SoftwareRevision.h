@@ -10,7 +10,7 @@
 
 #include "Mi_Main.h"
 
-#define MI_SW_REVISION				0.71
+#define MI_SW_REVISION				0.81
 
 /* History
 
@@ -42,6 +42,16 @@
 2026-04-01	|  0.71
 	- 공통 라이브러리 메모리 안전성 패치 적용 (OneLibrary/oThirdParty)
 	  NULL 포인터 검증, sprintf→snprintf, DMA 에러복구, 버퍼 오버플로우 수정
+2026-05-08	|  0.81
+	- VDD 동적 보정 추가 (VREFINT 기반): SystemSupply 온도 드리프트 개선
+	- ADC offset 교정을 Measurement_CalibrateVDD로 단일화 (Native_ADCRead 중복 제거)
+	- MiMain_GPIOInit/DeInit 리팩터링:
+	  · 불필요 초기 출력값 IO_WRITE 블록 제거, 변수명 cfg로 단축
+	  · Init 시작부에 MiMain_GPIOControl() 호출 추가 → 마지막 IO 상태 복원
+	  · DeInit은 출력 핀을 ANALOG 모드로 전환 (저전력)
+	  · LORA_ENABLE Init/DeInit을 MiLoRa_IsSleep 조건부로 변경
+	- MiIoT_Sleep LED 시퀀스 단순화: ON 50ms / OFF 200ms 명시 사이클
+	- SYSTEM_SUPPLY_LOW_LIMIT 3200mV로 통일
 */
 
 #endif /* INC_MI_SOFTWAREREVISION_H_ */

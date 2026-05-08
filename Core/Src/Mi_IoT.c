@@ -35,7 +35,6 @@ uint8_t MiIoT_IsSleep;
 uint8_t MiIoT_LED;
 
 oTrig_t MiIoT_USBConnectTrig = TRIGGER_INITIALIZER(1);
-oBlinker_t MiIoT_BlinkSleep = BLINK_INITIALIZER(80,	 0b0000000000000010, 5);
 oBlinker_t MiIoT_BlinkIdle  = BLINK_INITIALIZER(150, 0b0000000000000001, 300);
 oBlinker_t MiIoT_BlinkBusy  = BLINK_INITIALIZER(100, 0b1000000000000001, 100);
 
@@ -310,19 +309,20 @@ void MiIoT_LEDIndicator()
 	//LED indicator
 	oBlink(&MiIoT_BlinkBusy);
 	oBlink(&MiIoT_BlinkIdle);
-	oBlink(&MiIoT_BlinkSleep);
 
-	if(pLoRaDevice->Status.IsBusy){
-		MiIoT_LED = MiIoT_BlinkBusy.Output;
-	}
-	else if(MiIoT_IsBusy || MiIoT_IsIORun){
-		MiIoT_LED = MiIoT_BlinkIdle.Output;
-	}
-	else if(MiIoT_IsSleep){
-		MiIoT_LED = MiIoT_BlinkSleep.Output;
-	}
-	else{
+	if(MiIoT_Parameter.Operating.OperatingMode == IoTOperatingMode_Stop){
 		MiIoT_LED = 0;
+	}
+	else if(!MiIoT_IsSleep){
+		if(pLoRaDevice->Status.IsBusy){
+			MiIoT_LED = MiIoT_BlinkBusy.Output;
+		}
+		else if(MiIoT_IsBusy || MiIoT_IsIORun){
+			MiIoT_LED = MiIoT_BlinkIdle.Output;
+		}
+		else{
+			MiIoT_LED = 0;
+		}
 	}
 }
 
@@ -582,11 +582,12 @@ void MiIoT_Sleep()
 				/* no break */
 			case 0:
 				MiIoT_IsSleep = 0;
-				MiIoT_BlinkSleep.Enable = 0;
 
 				if(!MiIoT_IsIORun && !MiIoT_IsBusy && MiIoT_IsPowerSaveMode && !MiIoT_IsPause && oTMR_GetTick(TICKBASE_SYSTICK) > 3000){
 					if(oTMR_Elapsed(&SleepTimer, 5, TICKBASE_SYSTICK)){
 						MiIoT_IsSleep = 1;
+						MiIoT_LED = 0;
+						SleepTimer = oTMR_GetTick(TICKBASE_SYSTICK);
 						MiIoT_SleepStep++;
 					}
 				}
@@ -595,26 +596,31 @@ void MiIoT_Sleep()
 				}
 				break;
 			case 1:
+				MiIoT_LED = 1;
+				if(oTMR_Elapsed(&SleepTimer, 20, TICKBASE_SYSTICK)){
+					SleepTimer = oTMR_GetTick(TICKBASE_SYSTICK);
+					MiIoT_SleepStep++;
+				}
+				break;
+			case 2:			
+				MiIoT_LED = 0;
+				if(oTMR_Elapsed(&SleepTimer, 200, TICKBASE_SYSTICK)){
+					SleepTimer = oTMR_GetTick(TICKBASE_SYSTICK);
+					MiIoT_SleepStep++;
+				}
+				break;
+			case 3:
 				if(MiIoT_GPIODeInitCallback){
 					MiIoT_GPIODeInitCallback();
 				}
-				MiIoT_SleepStep++;
-				break;
-			case 2:
-				Native_SleepMode(MiIoT_Parameter.Operating.OperatingMode == IoTOperatingMode_Stop ? 0 : SECOND_TO_MS(10));
+
+				Native_SleepMode(MIIOT_SLEEP_TIME);
 
 				if(MiIoT_GPIOInitCallback){
 					MiIoT_GPIOInitCallback();
 				}
 
 				MiIoT_SleepStep++;
-				break;
-			case 3:
-				MiIoT_BlinkSleep.Enable = 1;
-
-				if(MiIoT_BlinkSleep.IsEndOfIndex){
-					MiIoT_SleepStep++;
-				}
 				break;
 			case 4:
 				if(MiIoT_SleepCallback == NULL){

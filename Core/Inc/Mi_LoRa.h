@@ -24,6 +24,8 @@ extern uint8_t MiLoRa_IsBusy;
 extern uint8_t MiLoRa_IsOpen;
 extern uint8_t MiLoRa_IsReachable;
 extern uint32_t MiLoRa_OpenFailCount;
+extern uint8_t MiLoRa_IsSleep;
+
 
 extern uint32_t MiLoRa_OpenFailTimestamp;
 extern uint32_t MiLoRa_RadioFailCount;
