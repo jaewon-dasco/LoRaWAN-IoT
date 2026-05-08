@@ -10,7 +10,7 @@
 
 #include "Mi_Main.h"
 
-#define MI_SW_REVISION				0.81
+#define MI_SW_REVISION				0.8
 
 /* History
 
@@ -39,10 +39,10 @@
 	- RAK3172 ATE 실패히도 다음 시퀀스 넘어가도록 수정
 	- Dwonlink DeviceInfo 설정 추가
 	- MiIoT DataPacket Pointer 수정 (pPacket->ppPacket)
-2026-04-01	|  0.71
+2026-04-01	|  0.7
 	- 공통 라이브러리 메모리 안전성 패치 적용 (OneLibrary/oThirdParty)
 	  NULL 포인터 검증, sprintf→snprintf, DMA 에러복구, 버퍼 오버플로우 수정
-2026-05-08	|  0.81
+2026-05-08	|  0.8
 	- VDD 동적 보정 추가 (VREFINT 기반): SystemSupply 온도 드리프트 개선
 	- ADC offset 교정을 Measurement_CalibrateVDD로 단일화 (Native_ADCRead 중복 제거)
 	- MiMain_GPIOInit/DeInit 리팩터링:
