@@ -131,7 +131,7 @@ oResult_t MiSerial_Set(char *Message)
 			default:
 				break;
 			case RESULT_OK:
-				lVal = strtol(StrVal, &endptr, 10);
+				lVal = strtol(StrVal, &endptr, 10);  // 10진수 기준
 				if(endptr != StrVal){
 					MiIoT_Parameter.Operating.OperatingMode = (uint8_t)lVal;
 				}
@@ -149,7 +149,7 @@ oResult_t MiSerial_Set(char *Message)
 			default:
 				break;
 			case RESULT_OK:
-				lVal = strtol(StrVal, &endptr, 10);
+				lVal = strtol(StrVal, &endptr, 10);  // 10진수 기준
 				if(endptr != StrVal){
 					MiIoT_Parameter.Operating.SamplingInterval = (uint32_t)lVal;
 				}
@@ -227,7 +227,7 @@ oResult_t MiSerial_Set(char *Message)
 			default:
 				break;
 			case RESULT_OK:
-				lVal = strtol(StrVal, &endptr, 10);
+				lVal = strtol(StrVal, &endptr, 10);  // 10진수 기준
 				if(endptr != StrVal){
 					if(MiSerial_SetChannelConfig(Message, &MiIoT_Parameter, (uint8_t)lVal) != RESULT_OK){
 						ErrorCount++;
@@ -463,12 +463,13 @@ oResult_t MiSerial_Get(char *Message)
 	if(strstr(Message, "Get/StoredData") != NULL){
 		char StrVal[32];
 		char *endptr;
+		long lTmp;
 		uint32_t Address = 0;
 
 		if(oJSON_GetValue(Message, "\"Address\"", StrVal, sizeof(StrVal)) == RESULT_OK){
-			long lAddr = strtol(StrVal, &endptr, 10);
+			lTmp = strtol(StrVal, &endptr, 10);
 			if(endptr != StrVal){
-				Address = (uint32_t)lAddr;
+				Address = (uint32_t)lTmp;
 			}
 		}
 

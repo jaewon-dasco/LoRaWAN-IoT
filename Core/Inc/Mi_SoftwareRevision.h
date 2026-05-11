@@ -10,7 +10,7 @@
 
 #include "Mi_Main.h"
 
-#define MI_SW_REVISION				0.8
+#define MI_SW_REVISION				0.91
 
 /* History
 
@@ -52,6 +52,25 @@
 	  · LORA_ENABLE Init/DeInit을 MiLoRa_IsSleep 조건부로 변경
 	- MiIoT_Sleep LED 시퀀스 단순화: ON 50ms / OFF 200ms 명시 사이클
 	- SYSTEM_SUPPLY_LOW_LIMIT 3200mV로 통일
+	- LoRa Join 실패 시 backoff 적용: 5s → 10s → 20s → 40s → 80s → 160s → 300s(cap, 5min)
+2026-05-08	|  0.9
+	- LoRa Open 안정화 개선:
+	  · 전원 OFF 대기 500ms → 1000ms
+	  · 전원 ON 부팅 대기 500ms → 2000ms
+	  · AT 명령 실패 시 Close 후 즉시 재Open (Step 1 복귀), MiLoRa_RadioFailCount 누적
+	  · 단계별 진단 로그 추가 (LoRaEnable=0, Power off, Off wait done, boot wait, error restart)
+2026-05-11	|  0.91
+	- LoRa Open/Sleep 동작 중 MCU STOP 진입 방지:
+	  · MiLoRa_IsBusy를 MiIoT_IsBusy에 포함 → Open Step 1-2 (전원 OFF 구간) sleep 차단
+	  · Wakeup 전환 구간(IsSleep=1, IORun=0)에 IsBusy=1 명시 가드 추가
+	  · Open 성공 시 MiLoRa_RadioFailCount 리셋 (Control fault reset 오발 방지)
+	- MiLoRa_IsBusy: Open Error/Fail 시 0 명시 추가 (Open 실패 후 busy 잔존 방지)
+	- MiStorage_IsBusy 플래그 도입:
+	  · MiStorage() 진입부 1줄 동기화 → IsBusy = (NANDEnable || IsOpen)
+	  · NAND 전원 ON 또는 MT29F2G 초기화 완료 상태 추적
+	  · MCU sleep 차단 — Open Step 2-3 진행 + 운영 + Close 진행 전체 구간 커버
+	- MiStorage_AutoOffTimer 오타 수정 (MiStroage → MiStorage, 5곳)
+	- MiIoT_IsBusy 식 정리: MiStorage_IsBusy || MiLoRa_IsBusy (IsOpen 중복 제거)
 */
 
 #endif /* INC_MI_SOFTWAREREVISION_H_ */

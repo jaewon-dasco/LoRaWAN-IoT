@@ -14,8 +14,9 @@
 #include "LoRa_RAK3172.h"
 
 #define MILORA_QOS_MAX					0xFF
-//#define MILORA_OPEN_REMAINING_TIME		((MiLoRa_OpenFailTimestamp == 0 || MiLoRa_OpenFailCount == 0) ? 0 : oTMR_CountDown(&MiLoRa_OpenFailTimestamp, MATH_LIMIT(SECOND_TO_MS(5) * (MiLoRa_OpenFailCount-1), 0, SECOND_TO_MS(15)), TICKBASE_SYSTICK))
-#define MILORA_OPEN_REMAINING_TIME		((MiLoRa_OpenFailTimestamp == 0 || MiLoRa_OpenFailCount == 0) ? 0 : oTMR_CountDown(&MiLoRa_OpenFailTimestamp, SECOND_TO_MS(5), TICKBASE_SYSTICK))
+/* Join 실패 시 backoff: 5s, 10s, 20s, 40s, 80s, 160s, 300s(cap) — 5*(2^(n-1)), max 5min */
+#define MILORA_OPEN_BACKOFF_MS			SECOND_TO_MS(MiLoRa_OpenFailCount >= 7 ? 300 : (5 << (MiLoRa_OpenFailCount - 1)))
+#define MILORA_OPEN_REMAINING_TIME		((MiLoRa_OpenFailTimestamp == 0 || MiLoRa_OpenFailCount == 0) ? 0 : oTMR_CountDown(&MiLoRa_OpenFailTimestamp, MILORA_OPEN_BACKOFF_MS, TICKBASE_SYSTICK))
 
 extern RAK3172_t *pLoRaDevice;
 

@@ -130,6 +130,14 @@ oResult_t oSerial_Read(oSerialHandler_t *pSerial, char *pBuffer, uint32_t SizeOf
 				return RESULT_ERROR;
 			}
 		}
+		else if(pSerial->pUART->RxXferSize && pSerial->IdleTimer && oTMR_Elapsed(&pSerial->IdleTimer, MATH_MAX(WaitDelay, 100), TICKBASE_SYSTICK)){
+			/* IT 모드 idle 타임아웃: 수신 없으면 재시작 */
+			HAL_UART_AbortReceive(pSerial->pUART);
+			pSerial->IndexOfRxFirst = 0;
+			pSerial->IndexOfRxLast = 0;
+			pSerial->IdleTimer = 0;
+			HAL_UART_Receive_IT(pSerial->pUART, (uint8_t *)pSerial->pRxBuffer, pSerial->SizeOfRxBuffer);
+		}
 
 		pSerial->IndexOfRxLast = pSerial->pUART->RxXferSize - pSerial->pUART->RxXferCount;
 	}
@@ -204,6 +212,16 @@ oResult_t oSerial_ReadSplit(oSerialHandler_t *pSerial, char *pBuffer, uint32_t S
 				HAL_UART_AbortReceive(pSerial->pUART);
 				return RESULT_ERROR;
 			}
+		}
+		else if(pSerial->pUART->RxXferSize && pSerial->IdleTimer && oTMR_Elapsed(&pSerial->IdleTimer, 1000, TICKBASE_SYSTICK)){
+			/* IT 모드 idle 타임아웃: 1초 이상 수신 없으면 재시작 */
+			HAL_UART_AbortReceive(pSerial->pUART);
+			pSerial->IndexOfRxFirst = 0;
+			pSerial->IndexOfRxLast = 0;
+			pSerial->IndexOfRxFinder = 0;
+			pSerial->FindedCount = 0;
+			pSerial->IdleTimer = 0;
+			HAL_UART_Receive_IT(pSerial->pUART, (uint8_t *)pSerial->pRxBuffer, pSerial->SizeOfRxBuffer);
 		}
 
 		pSerial->IndexOfRxLast = pSerial->pUART->RxXferSize - pSerial->pUART->RxXferCount;

@@ -122,6 +122,7 @@ typedef enum{
 	IoTDataType_Analog 					= 3,
 	IoTDataType_Tilt					= 4,
 	IoTDataType_DataArray				= 5,
+	IoTDataType_Vibration				= 6,
 
 	IoTDataType_Status 					= 200,
 	IoTDataType_Operating				= 201,
@@ -213,6 +214,18 @@ typedef struct
 	IoTSensorTemp_t			Temperature;
 	IoTSensorTiltDual_t		Sensor;
 } IoTDataTilt_t;
+
+typedef struct
+{
+	IoTDateAndTime_t		Time;
+	uint16_t				PPV_X;		// mm/s × 100
+	uint16_t				PPV_Y;
+	uint16_t				PPV_Z;
+	uint16_t				PVS;		// mm/s × 100
+	uint16_t				Freq_X;		// Hz × 10
+	uint16_t				Freq_Y;
+	uint16_t				Freq_Z;
+} IoTDataVibration_t;
 
 typedef union
 {

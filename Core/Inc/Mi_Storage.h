@@ -59,6 +59,7 @@ typedef struct{
 }MiStorage_NandHeader_t;
 
 extern uint8_t MiStorage_IsOpen;
+extern uint8_t MiStorage_IsBusy;
 extern int8_t MiStorage_ParameterSaveCmd;
 extern MiStorage_NandHeader_t MiStorage_NandHeader;
 

@@ -286,9 +286,9 @@ oResult_t MiLoRa_SendMailbox(IoT_MailboxItem_t *pMail)
 	// 유효하지 않은 메일 → 즉시 RESULT_NULL (스케줄러에서 메일 제거)
 	if(pMail == NULL || pMail->Payload.DLC == 0){
 		SendMailboxStep = 0;
-		return RESULT_NULL;
+		result = RESULT_NULL;
+		goto EXIT;
 	}
-
 	// LoRa 미연결 또는 Sleep 중 → 일시 정지 (스케줄러에서 대기, 메일 유지)
 	if(!pLoRaDevice->Status.IsJoined || !MiLoRa_IsOpen || pLoRaDevice->Status.IsSleeping){
 		SendMailboxStep = 0;
@@ -392,8 +392,6 @@ EXIT:
 			SendMailboxStep = 0;
 			break;
 	}
-
-	MiLoRa_IsBusy = pMail->IsBusy;
 
 	return result;
 }
@@ -582,12 +580,18 @@ oResult_t MiLoRa_Sleep(uint8_t Enable)
 	}
 
 	if(Enable){
+		// Sleep 진입: IsSleep=0이라 IORun=1 → MCU sleep 자연스럽게 차단됨
+		// LPM 성공 후 IORun=0 되면 MCU도 STOP 진입 (의도된 동작)
 		if((result = RAK3172_Sleep()) == RESULT_OK){
 			MiLoRa_RadioFailCount = 0;
 			MiLoRa_IsBusy = 0;
+			MiLoRa_IsSleep = 1;
 		}
 	}
 	else{
+		// Wakeup: IsSleep=1이라 IORun=0 → MCU sleep 가능 → AT 명령 진행 중 IsBusy=1로 명시 차단
+		MiLoRa_IsBusy = 1;
+
 		switch(SleepStep)
 		{
 			case 0:	// Step 0: UART 재초기화 (Stop 모드 복귀 후 GPIO Analog → AF 복원)
@@ -602,7 +606,6 @@ oResult_t MiLoRa_Sleep(uint8_t Enable)
 			case 1:	// Step 1: RAK3172 Wakeup 명령 전송
 				if((result = RAK3172_Wakeup()) == RESULT_OK){
 					MiLoRa_RadioFailCount = 0;
-					MiLoRa_IsBusy = 0;
 				}
 				break;
 		}
@@ -687,7 +690,6 @@ oResult_t MiLoRa_Open()
 			if(MiIoT_Parameter.Information.ProductCode != 0 && MILORA_OPEN_REMAINING_TIME <= 0){
 				MiLoRa_OpenStep++;
 				MiLoRa_IsBusy = 1;
-
 				JoinTryCount = 0;
 				MiLoRa_RadioFailCount = 0;
 				MiLoRa_GenLoRaWANKey();	// MCU UID 기반 OTAA 키 생성
@@ -700,23 +702,26 @@ oResult_t MiLoRa_Open()
 		case 1: // 기존 연결 정리 - 전원 OFF + UART 해제
 			oSerial_Log("MiLoRa", "Open start");
 			GPIOs.DO.LoRaEnable = 0;	// RAK3172 전원 차단
+			oSerial_Log("MiLoRa", "LoRaEnable=0");
 			RAK3172_Close();			// UART 디바이스 해제
+			oSerial_Log("MiLoRa", "Power off");
 
 			MiLoRa_OpenStep++;
 			break;
-		case 2: // 전원 OFF 안정화 대기 (500ms)
-			if(oTMR_Elapsed(&MiLoRaOpenSqcTimer, 500, TICKBASE_SYSTICK)){
+		case 2: // 전원 OFF 안정화 대기 (1000ms)
+			if(oTMR_Elapsed(&MiLoRaOpenSqcTimer, 1000, TICKBASE_SYSTICK)){
 				MiLoRaOpenSqcTimer = oTMR_GetTick(TICKBASE_SYSTICK);
 				MiLoRa_IsOpen = 0;
+				oSerial_Log("MiLoRa", "Off wait done (1000ms)");
 				MiLoRa_OpenStep++;
 			}
 			break;
-		case 3: // 전원 ON + 부팅 대기 (500ms)
+		case 3: // 전원 ON + 부팅 대기 (2000ms)
 			MiLoRa_IsPowerOn = 1;
 			GPIOs.DO.LoRaEnable = 1;	// RAK3172 전원 인가
 
-			if(oTMR_Elapsed(&MiLoRaOpenSqcTimer, 500, TICKBASE_SYSTICK)){
-				oSerial_Log("MiLoRa", "Power on");
+			if(oTMR_Elapsed(&MiLoRaOpenSqcTimer, 2000, TICKBASE_SYSTICK)){
+				oSerial_Log("MiLoRa", "Power on (boot wait 2000ms)");
 				MiLoRa_OpenStep++;
 			}
 			break;
@@ -730,9 +735,11 @@ oResult_t MiLoRa_Open()
 					MiLoRaOpenSqcTimer = oTMR_GetTick(TICKBASE_SYSTICK);
 					oSerial_Log("MiLoRa", "Open okay");
 					break;
-				case RESULT_ERROR:	// AT 명령 실패 → Open 종료
-					result = RESULT_ERROR;
-					oSerial_Log("MiLoRa", "Open error");
+				case RESULT_ERROR:	// AT 명령 실패 → Close 후 즉시 재시도 (Step 1 복귀)
+					MiLoRa_RadioFailCount++;
+					MiLoRa_OpenStep = 1;
+					MiLoRaOpenSqcTimer = oTMR_GetTick(TICKBASE_SYSTICK);
+					oSerial_Log("MiLoRa", "Open error, restart (radio fail:%d)", (int)MiLoRa_RadioFailCount);
 					break;
 			}
 
@@ -771,7 +778,6 @@ oResult_t MiLoRa_Open()
 	if(result != RESULT_RUN){
 		MiLoRaOpenSqcTimer = oTMR_GetTick(TICKBASE_SYSTICK);
 		MiLoRa_OpenStep = 0;	// 상태머신 초기화
-		MiLoRa_IsBusy = 0;
 
 		switch(result)
 		{
@@ -784,6 +790,7 @@ oResult_t MiLoRa_Open()
 				MiLoRa_IsReachable = 1;
 				MiLoRa_OpenFailTimestamp = 0;
 				MiLoRa_OpenFailCount = 0;
+				MiLoRa_RadioFailCount = 0;	// AT 재시도 누적분 리셋 (Control의 fault reset 오발 방지)
 				MiLoRa_OpenTimestamp = oTMR_GetTick(TICKBASE_SYSTICK);
 				break;
 			case RESULT_FAULT:		// AT 명령 실패
@@ -799,9 +806,10 @@ oResult_t MiLoRa_Open()
 				break;
 		}
 
-		// Open 실패 시 전원 차단 (전력 절약)
+		// Open 실패 시 전원 차단 (전력 절약) + Busy 해제
 		if(!MiLoRa_IsOpen){
 			MiLoRa_IsPowerOn = 0;
+			MiLoRa_IsBusy = 0;
 			GPIOs.DO.LoRaEnable = 0;
 			RAK3172_Close();
 		}

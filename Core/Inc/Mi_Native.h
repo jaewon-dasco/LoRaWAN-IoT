@@ -20,6 +20,7 @@ extern oResult_t Native_SRAMWrite(uint32_t Index, uint8_t *pData, uint32_t SizeO
 extern oResult_t Native_ADCRead(uint32_t Channel, uint32_t SamplingTime, uint16_t *pData, uint32_t Count);
 
 extern void Native_DisableGPIOs(oIO_t *Filter, uint32_t CountOfFilter);
+#define NATIVE_WATCHDOG_MAX_MS  32760
 extern void Native_WatchDog(uint32_t Millisecond);
 extern oResult_t Native_SleepMode(uint32_t Millisecond);
 

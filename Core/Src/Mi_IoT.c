@@ -641,12 +641,12 @@ void MiIoT(UART_HandleTypeDef *pLoRaUART)
 
 	MiLoRa(pLoRaUART);
 
-	MiIoT_IsBusy = MiStorage_IsOpen;
+	MiIoT_IsBusy = MiStorage_IsBusy || MiLoRa_IsBusy;	// LoRa/Storage 작업 진행 중 sleep 차단 (Storage_IsBusy가 NANDEnable 반영하므로 IsOpen 중복 제거)
 
 	if(MiIoT_UpdateMeasurement() == RESULT_RUN){
 		MiIoT_IsBusy = 1;
 	}
-	
+
 	if (MiIoT_UpdateSampling() == RESULT_RUN){
 		MiIoT_IsBusy = 1;
 	}

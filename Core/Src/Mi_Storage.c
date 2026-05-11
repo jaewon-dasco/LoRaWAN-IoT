@@ -6,8 +6,9 @@
 
 static IoTOperatingParameter_t MiStorage_LastOperating;
 MiStorage_NandHeader_t MiStorage_NandHeader;
-uint32_t MiStroage_AutoOffTimer;
+uint32_t MiStorage_AutoOffTimer;
 uint8_t MiStorage_IsOpen = 0;
+uint8_t MiStorage_IsBusy = 0;
 int8_t MiStorage_ParameterSaveCmd;
 MT29F2G_t MT29F2G;
 
@@ -59,7 +60,7 @@ oResult_t MiStorage_Open()
 				case RESULT_RUN:
 					break;
 				case RESULT_OK:
-					MiStroage_AutoOffTimer = oTMR_GetTick(TICKBASE_SYSTICK);
+					MiStorage_AutoOffTimer = oTMR_GetTick(TICKBASE_SYSTICK);
 					MiStorage_IsOpen = 1;
 					result = RESULT_OK;
 					break;
@@ -183,7 +184,7 @@ oResult_t MiStorage_Read(uint32_t Address, MiStorage_PageHeader_t *pHeader, uint
 		default:
 			break;
 		case RESULT_RUN:
-			MiStroage_AutoOffTimer = oTMR_GetTick(TICKBASE_SYSTICK);
+			MiStorage_AutoOffTimer = oTMR_GetTick(TICKBASE_SYSTICK);
 			break;
 		case RESULT_FAULT:
 			MiStorage_NandHeader.Status.IsFault = 1;
@@ -280,7 +281,7 @@ oResult_t MiStorage_Write(uint32_t Address, uint8_t *pData, uint32_t SizeOfData)
 		default:
 			break;
 		case RESULT_RUN:
-			MiStroage_AutoOffTimer = oTMR_GetTick(TICKBASE_SYSTICK);
+			MiStorage_AutoOffTimer = oTMR_GetTick(TICKBASE_SYSTICK);
 			break;
 		case RESULT_FAULT:
 			MiStorage_NandHeader.Status.IsFault = 1;
@@ -775,6 +776,8 @@ void MiStorage()
 {
 	static uint8_t MiStorageStep = 0;
 
+	MiStorage_IsBusy = GPIOs.DO.NANDEnable || MiStorage_IsOpen;
+
 	switch(MiStorageStep)
 	{
 		default:
@@ -831,7 +834,7 @@ void MiStorage()
 				}
 			}
 
-			if(MiStorage_IsOpen && oTMR_Elapsed(&MiStroage_AutoOffTimer, 1000, TICKBASE_SYSTICK)){
+			if(MiStorage_IsOpen && oTMR_Elapsed(&MiStorage_AutoOffTimer, 1000, TICKBASE_SYSTICK)){
 				MiStorage_Close();
 			}
 			break;
