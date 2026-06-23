@@ -20,11 +20,13 @@ typedef struct{
 		uint8_t ADCRefEnable;
 		uint8_t CANEnable;
 		uint8_t NANDEnable;
-
 		uint8_t PwrEnable_U0;
 		uint8_t PwrEnable_U1;
-
 		uint8_t PwrSupplySel;
+
+		uint8_t AmpEnable;
+		uint8_t CurrentModeEnable;
+		uint8_t PwrSupply5VEnable;
 
 		uint8_t OperatingLED;
 	}DO;
@@ -47,6 +49,7 @@ extern IWDG_HandleTypeDef hiwdg;
 
 extern ADC_HandleTypeDef hadc1;
 extern CAN_HandleTypeDef hcan1;
+extern I2C_HandleTypeDef hi2c2;
 extern QSPI_HandleTypeDef hqspi;
 
 extern UART_HandleTypeDef hlpuart1;

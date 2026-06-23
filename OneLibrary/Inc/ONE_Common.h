@@ -16,6 +16,21 @@
 #include <ctype.h>
 #include "main.h"
 
+/* DMA 호환 매크로 — STM32L4(DMA1/2) ↔ STM32U5(GPDMA) 단일 소스
+ *   ONE_DMA_GET_COUNTER : 남은 전송 카운트 (L4: CNDTR, U5: BR1.BNDT)
+ *   ONE_DMA_IS_CIRCULAR : 순환 모드 여부 (U5는 CubeMX가 LinkedList로 구성)
+ *   ONE_DMA_SET_CIRCULAR: 순환 모드 설정 (U5는 init 시점에 LLI로 고정, 런타임 변경 미지원)
+ */
+#if defined(STM32U5) || defined(STM32H5) || defined(STM32U0)
+#define ONE_DMA_GET_COUNTER(hdma)		__HAL_DMA_GET_COUNTER(hdma)
+#define ONE_DMA_IS_CIRCULAR(hdma)		(1)  /* CubeMX LLI 구성 가정 */
+#define ONE_DMA_SET_CIRCULAR(hdma)		((void)0)  /* GPDMA: init 시점 고정, 런타임 변경 불가 */
+#else
+#define ONE_DMA_GET_COUNTER(hdma)		((hdma)->Instance->CNDTR)
+#define ONE_DMA_IS_CIRCULAR(hdma)		((hdma)->Init.Mode == DMA_CIRCULAR)
+#define ONE_DMA_SET_CIRCULAR(hdma)		((hdma)->Init.Mode = DMA_CIRCULAR)
+#endif
+
 #ifndef ArrayLen
 #define ArrayLen(a)							(sizeof(a)/ sizeof((a)[0]))
 #endif

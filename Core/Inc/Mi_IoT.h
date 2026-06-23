@@ -94,7 +94,7 @@ typedef enum{
 	IoTProductType_SIV100_5C			= 2,
 	IoTProductType_SIC100_2C		 	= 3,
 	IoTProductType_SIM100_6C		 	= 4,
-	IoTProductType_SIA100_2A		 	= 5,
+	IoTProductType_SIA100_SD		 	= 5,
 	IoTProductType_VMX3264			 	= 6,
 	IoTProductType_Max		 			= 255,
 }IoTProductType_t;
@@ -121,8 +121,10 @@ typedef enum{
 	IoTDataType_ArraySingleTilt			= 2,
 	IoTDataType_Analog 					= 3,
 	IoTDataType_Tilt					= 4,
-	IoTDataType_DataArray				= 5,
-	IoTDataType_Vibration				= 6,
+	IoTDataType_Vibration				= 5,
+
+	IoTDataType_DataArray_Type1			= 100,
+	IoTDataType_DataArray_Type2			= 101,
 
 	IoTDataType_Status 					= 200,
 	IoTDataType_Operating				= 201,
@@ -159,17 +161,22 @@ typedef struct
 	uint32_t			Axis		: 24;
 } IoTSensorTiltSingle_t; //3byte
 
+
+typedef struct
+{
+	IoTSensorTemp_t		Temperature;
+	union{
+		IoTSensorTiltDual_t		Dual[MIIOT_ARRAYSENSOR_MAX_COUNT];
+		IoTSensorTiltSingle_t	Single[MIIOT_ARRAYSENSOR_MAX_COUNT];
+	};
+
+	IoTSensorType_t		Type;
+	uint8_t				Channel		: 8;
+} IoTSensorTiltArray_t;
+
 ///***************************************************************************************************************************
 // IoT Data
 //****************************************************************************************************************************
-typedef enum
-{
-	IoTDataStateBits_Okay = 0,
-	IoTDataStateBits_Disconnected = 0x1,
-	IoTDataStateBits_Timeout = 0x2,
-	IoTDataStateBits_OutOfRange = 0x4,
-} IoTStateBits_t;
-
 typedef struct
 {
 	uint8_t 	Year;
@@ -183,9 +190,16 @@ typedef struct
 typedef struct
 {
 	IoTDateAndTime_t		Time;
+	IoTDataArrayItem_t		Analog;
+	IoTSensorTiltArray_t	TiltArray;
+} IoTDataSIC100_2C_t;
+
+typedef struct
+{
+	IoTDateAndTime_t		Time;
 	uint8_t					Channel;
 	IoTSensorTemp_t			Temperature;
-	IoTSensorTiltDual_t		Sensor[MIIOT_ARRAYSENSOR_MAX_COUNT];
+	IoTSensorTiltDual_t		TiltArray[MIIOT_ARRAYSENSOR_MAX_COUNT];
 } IoTDataArrayDualTilt_t;
 
 typedef struct
@@ -193,7 +207,7 @@ typedef struct
 	IoTDateAndTime_t		Time;
 	uint8_t					Channel;
 	IoTSensorTemp_t			Temperature;
-	IoTSensorTiltSingle_t	Sensor[MIIOT_ARRAYSENSOR_MAX_COUNT];
+	IoTSensorTiltSingle_t	TiltArray[MIIOT_ARRAYSENSOR_MAX_COUNT];
 } IoTDataArraySingleTilt_t;
 
 typedef struct
@@ -303,7 +317,7 @@ typedef struct{
 	float				ErrorTolerance;
 	union{
 		IoTChannelPropertiesArray_t 		Array;
-		IoTChannelPropertiesVW_t 			VibrationWrie;
+		IoTChannelPropertiesVW_t 			VibrationWire;
 		IoTChannelPropertiesTilt_t 			Tilt;
 		IoTChannelPropertiesThermistor_t	Thermistor;
 	}Properties;
@@ -422,6 +436,7 @@ extern uint8_t MiIoT_IsBusy;
 extern uint8_t MiIoT_IsIORun;
 extern uint8_t MiIoT_IsPowerSaveMode;
 extern uint8_t MiIoT_IsPause;
+extern uint8_t MiIoT_IsSleep;
 extern uint8_t MiIoT_LED;
 
 

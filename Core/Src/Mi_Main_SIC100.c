@@ -13,16 +13,19 @@
 #define SYSTEM_SUPPLY_LOW_LIMIT		3200
 #define RTC_SUPPLY_LOW_LIMIT		2100
 
-oIO_t DO_ADC_REF_EANBLE		= {DO_ADC_REF_ENABLE_GPIO_Port,		DO_ADC_REF_ENABLE_Pin,		IO_LOW};
-oIO_t DO_NAND_ENABLE		= {DO_NAND_ENABLE_GPIO_Port,		DO_NAND_ENABLE_Pin,			IO_LOW};
-oIO_t DO_POWEROUT_ENALBE0	= {DO_POWEROUT_ENABLE_0_GPIO_Port, 	DO_POWEROUT_ENABLE_0_Pin,	IO_LOW};
-oIO_t DO_POWEROUT_ENALBE1	= {DO_POWEROUT_ENABLE_1_GPIO_Port, 	DO_POWEROUT_ENABLE_1_Pin,	IO_LOW};
-oIO_t DO_CAN_EANBLE			= {DO_CAN_ENABLE_GPIO_Port,			DO_CAN_ENABLE_Pin,		 	IO_HIGH};
-oIO_t DO_POWEROUT_SELECT	= {DO_POWEROUT_CH_SELECT_GPIO_Port,	DO_POWEROUT_CH_SELECT_Pin,	IO_HIGH};
+oIO_t DO_ADC_REF_EANBLE			= {DO_ADC_REF_ENABLE_GPIO_Port,			DO_ADC_REF_ENABLE_Pin,		IO_LOW};
+oIO_t DO_NAND_ENABLE			= {DO_NAND_ENABLE_GPIO_Port,			DO_NAND_ENABLE_Pin,			IO_LOW};
+oIO_t DO_POWEROUT_ENALBE0		= {DO_POWEROUT_ENABLE_0_GPIO_Port, 		DO_POWEROUT_ENABLE_0_Pin,	IO_LOW};
+oIO_t DO_POWEROUT_ENALBE1		= {DO_POWEROUT_ENABLE_1_GPIO_Port, 		DO_POWEROUT_ENABLE_1_Pin,	IO_LOW};
+oIO_t DO_CAN_EANBLE				= {DO_CAN_ENABLE_GPIO_Port,				DO_CAN_ENABLE_Pin,		 	IO_HIGH};
+oIO_t DO_POWEROUT_SELECT		= {DO_POWEROUT_CH_SELECT_GPIO_Port,		DO_POWEROUT_CH_SELECT_Pin,	IO_HIGH};
+oIO_t DO_AMP_ENABLE				= {DO_AMP_ENALBE_GPIO_Port,				DO_AMP_ENALBE_Pin,			IO_HIGH};
+oIO_t DO_CURRENT_MODE_ENABLE	= {DO_CURRENT_MODE_ENABLE_GPIO_Port,	DO_CURRENT_MODE_ENABLE_Pin,	IO_HIGH};
+oIO_t DO_POWEROUT_5V_ENABLE		= {DO_POWEROUT_5V_ENABLE_GPIO_Port,		DO_POWEROUT_5V_ENABLE_Pin,	IO_HIGH};
 
-oIO_t DO_LORA_ENABLE		= {DO_LORA_ENABLE_GPIO_Port,		DO_LORA_ENABLE_Pin,			IO_LOW};
-oIO_t DO_LED_OPERATING		= {DO_LED_OPERATING_GPIO_Port,		DO_LED_OPERATING_Pin,		IO_HIGH};
-oIO_t DI_USB_CONNECTED		= {DI_USBC_CONNECTED_GPIO_Port,		DI_USBC_CONNECTED_Pin,		IO_HIGH};
+oIO_t DO_LORA_ENABLE			= {DO_LORA_ENABLE_GPIO_Port,		DO_LORA_ENABLE_Pin,			IO_LOW};
+oIO_t DO_LED_OPERATING			= {DO_LED_OPERATING_GPIO_Port,		DO_LED_OPERATING_Pin,		IO_HIGH};
+oIO_t DI_USB_CONNECTED			= {DI_USBC_CONNECTED_GPIO_Port,		DI_USBC_CONNECTED_Pin,		IO_HIGH};
 
 GPIOs_t GPIOs;
 oDebounce_t DB_USBConnected	= DEBOUNCE_INITIALIZER(100,100);
@@ -40,6 +43,9 @@ oResult_t MiMain_GPIOControl()
 
 	IO_WRITE(DO_CAN_EANBLE, GPIOs.DO.CANEnable);
 	IO_WRITE(DO_POWEROUT_SELECT, GPIOs.DO.PwrSupplySel);
+	IO_WRITE(DO_AMP_ENABLE, GPIOs.DO.AmpEnable);
+	IO_WRITE(DO_CURRENT_MODE_ENABLE, GPIOs.DO.CurrentModeEnable);
+	IO_WRITE(DO_POWEROUT_5V_ENABLE, GPIOs.DO.PwrSupply5VEnable);
 	IO_WRITE(DO_LED_OPERATING, GPIOs.DO.OperatingLED);
 
 	oDebounce_GPIO(DI_USB_CONNECTED, &DB_USBConnected);
@@ -54,6 +60,11 @@ oResult_t MiMain_GPIOControl()
 	IORun += GPIOs.DO.CANEnable;
 	IORun += GPIOs.DO.PwrSupplySel;
 	IORun += GPIOs.DO.OperatingLED;
+
+	IORun += GPIOs.DO.AmpEnable;
+	IORun += GPIOs.DO.CurrentModeEnable;
+	IORun += GPIOs.DO.PwrSupply5VEnable;
+
 	IORun += GPIOs.DI.UsbConnected;
 
 	return IORun ? RESULT_RUN : RESULT_ERROR;
@@ -62,6 +73,9 @@ oResult_t MiMain_GPIOControl()
 void MiMain_GPIODeInit(void)
 {
 	GPIO_InitTypeDef cfg = {.Mode = GPIO_MODE_ANALOG, .Pull = GPIO_NOPULL};
+
+	HAL_I2C_DeInit(&hi2c2);
+	HAL_QSPI_DeInit(&hqspi);
 
 	if(!MiLoRa_IsSleep){
 		cfg.Pin = DO_LORA_ENABLE.Pin;
@@ -82,6 +96,12 @@ void MiMain_GPIODeInit(void)
 	HAL_GPIO_Init(DO_CAN_EANBLE.Port, &cfg);
 	cfg.Pin = DO_POWEROUT_SELECT.Pin;
 	HAL_GPIO_Init(DO_POWEROUT_SELECT.Port, &cfg);
+	cfg.Pin = DO_AMP_ENABLE.Pin;
+	HAL_GPIO_Init(DO_AMP_ENABLE.Port, &cfg);
+	cfg.Pin = DO_CURRENT_MODE_ENABLE.Pin;
+	HAL_GPIO_Init(DO_CURRENT_MODE_ENABLE.Port, &cfg);
+	cfg.Pin = DO_POWEROUT_5V_ENABLE.Pin;
+	HAL_GPIO_Init(DO_POWEROUT_5V_ENABLE.Port, &cfg);
 	cfg.Pin = DO_LED_OPERATING.Pin;
 	HAL_GPIO_Init(DO_LED_OPERATING.Port, &cfg);
 
@@ -102,8 +122,6 @@ void MiMain_GPIOInit(void)
 	__HAL_RCC_GPIOD_CLK_ENABLE();
 
 	MiMain_GPIOControl();
-
-	HAL_GPIO_WritePin(DO_PW_EXTCOM_GPIO_Port, DO_PW_EXTCOM_Pin, GPIO_PIN_SET);
 
 	//OD outputs, NOPULL, LOW speed | LORA, NAND, ADC_REF, PWR_EN0, PWR_EN1, PW_EXTCOM
 	cfg.Mode  = GPIO_MODE_OUTPUT_OD;
@@ -136,6 +154,18 @@ void MiMain_GPIOInit(void)
 	cfg.Pin   = DO_POWEROUT_SELECT.Pin;
 	HAL_GPIO_Init(DO_POWEROUT_SELECT.Port, &cfg);
 
+	//PP outputs, NOPULL, LOW speed | AMP_ENABLE, CURRENT_MODE_ENABLE, POWEROUT_5V_ENABLE
+	cfg.Mode  = GPIO_MODE_OUTPUT_PP;
+	cfg.Pull  = GPIO_NOPULL;
+	cfg.Speed = GPIO_SPEED_FREQ_LOW;
+
+	cfg.Pin   = DO_AMP_ENABLE.Pin;
+	HAL_GPIO_Init(DO_AMP_ENABLE.Port, &cfg);
+	cfg.Pin   = DO_CURRENT_MODE_ENABLE.Pin;
+	HAL_GPIO_Init(DO_CURRENT_MODE_ENABLE.Port, &cfg);
+	cfg.Pin   = DO_POWEROUT_5V_ENABLE.Pin;
+	HAL_GPIO_Init(DO_POWEROUT_5V_ENABLE.Port, &cfg);
+
 	//PP output, NOPULL, VERY_HIGH speed | OPERATING LED
 	cfg.Mode  = GPIO_MODE_OUTPUT_PP;
 	cfg.Pull  = GPIO_NOPULL;
@@ -151,7 +181,7 @@ void MiMain_GPIOInit(void)
 	HAL_ADC_Init(&hadc1);
 }
 
-IoT_DataPacket_t MiMain_GetStableData(IoT_DataPacket_t *pReference, IoT_DataPacket_t *pPast, IoT_DataPacket_t *pNew)
+IoT_DataPacket_t MiMain_GetArrayStableData(IoT_DataPacket_t *pReference, IoT_DataPacket_t *pPast, IoT_DataPacket_t *pNew)
 {
 	double errorD1;
 	double errorD2;
@@ -174,15 +204,15 @@ IoT_DataPacket_t MiMain_GetStableData(IoT_DataPacket_t *pReference, IoT_DataPack
 			IoTDataArrayDualTilt_t *pD1 = (IoTDataArrayDualTilt_t *)&pPast->Frame;
 			IoTDataArrayDualTilt_t *pD2 = (IoTDataArrayDualTilt_t *)&pNew->Frame;
 
-			errorD1 = MIIOT_DATA_DECODE_ANGLE(pRef->Sensor[i].AxisX) - MIIOT_DATA_DECODE_ANGLE(pD1->Sensor[i].AxisX);
-			errorD2 = MIIOT_DATA_DECODE_ANGLE(pRef->Sensor[i].AxisX) - MIIOT_DATA_DECODE_ANGLE(pD2->Sensor[i].AxisX);
+			errorD1 = MIIOT_DATA_DECODE_ANGLE(pRef->TiltArray[i].AxisX) - MIIOT_DATA_DECODE_ANGLE(pD1->TiltArray[i].AxisX);
+			errorD2 = MIIOT_DATA_DECODE_ANGLE(pRef->TiltArray[i].AxisX) - MIIOT_DATA_DECODE_ANGLE(pD2->TiltArray[i].AxisX);
 
-			pStable->Sensor[i].AxisX = (MATH_ABS(errorD1) <= MATH_ABS(errorD2)) ? pD1->Sensor[i].AxisX : pD2->Sensor[i].AxisX;
+			pStable->TiltArray[i].AxisX = (MATH_ABS(errorD1) <= MATH_ABS(errorD2)) ? pD1->TiltArray[i].AxisX : pD2->TiltArray[i].AxisX;
 
-			errorD1 = MIIOT_DATA_DECODE_ANGLE(pRef->Sensor[i].AxisY) - MIIOT_DATA_DECODE_ANGLE(pD1->Sensor[i].AxisY);
-			errorD2 = MIIOT_DATA_DECODE_ANGLE(pRef->Sensor[i].AxisY) - MIIOT_DATA_DECODE_ANGLE(pD2->Sensor[i].AxisY);
+			errorD1 = MIIOT_DATA_DECODE_ANGLE(pRef->TiltArray[i].AxisY) - MIIOT_DATA_DECODE_ANGLE(pD1->TiltArray[i].AxisY);
+			errorD2 = MIIOT_DATA_DECODE_ANGLE(pRef->TiltArray[i].AxisY) - MIIOT_DATA_DECODE_ANGLE(pD2->TiltArray[i].AxisY);
 
-			pStable->Sensor[i].AxisY = (MATH_ABS(errorD1) <= MATH_ABS(errorD2)) ? pD1->Sensor[i].AxisY : pD2->Sensor[i].AxisY;
+			pStable->TiltArray[i].AxisY = (MATH_ABS(errorD1) <= MATH_ABS(errorD2)) ? pD1->TiltArray[i].AxisY : pD2->TiltArray[i].AxisY;
 
 			if(cnt == 0){
 				cnt = MIIOT_PAYLOAD_TO_DUALARRAY_COUNT(pReference->DLC);
@@ -194,10 +224,10 @@ IoT_DataPacket_t MiMain_GetStableData(IoT_DataPacket_t *pReference, IoT_DataPack
 			IoTDataArraySingleTilt_t *pD1 = (IoTDataArraySingleTilt_t *)&pPast->Frame;
 			IoTDataArraySingleTilt_t *pD2 = (IoTDataArraySingleTilt_t *)&pNew->Frame;
 
-			errorD1 = MIIOT_DATA_DECODE_ANGLE(pRef->Sensor[i].Axis) - MIIOT_DATA_DECODE_ANGLE(pD1->Sensor[i].Axis);
-			errorD2 = MIIOT_DATA_DECODE_ANGLE(pRef->Sensor[i].Axis) - MIIOT_DATA_DECODE_ANGLE(pD2->Sensor[i].Axis);
+			errorD1 = MIIOT_DATA_DECODE_ANGLE(pRef->TiltArray[i].Axis) - MIIOT_DATA_DECODE_ANGLE(pD1->TiltArray[i].Axis);
+			errorD2 = MIIOT_DATA_DECODE_ANGLE(pRef->TiltArray[i].Axis) - MIIOT_DATA_DECODE_ANGLE(pD2->TiltArray[i].Axis);
 
-			pStable->Sensor[i].Axis = (MATH_ABS(errorD1) <= MATH_ABS(errorD2)) ? pD1->Sensor[i].Axis : pD2->Sensor[i].Axis;
+			pStable->TiltArray[i].Axis = (MATH_ABS(errorD1) <= MATH_ABS(errorD2)) ? pD1->TiltArray[i].Axis : pD2->TiltArray[i].Axis;
 
 			if(cnt == 0){
 				cnt = MIIOT_PAYLOAD_TO_SINGLEARRAY_COUNT(pReference->DLC);
@@ -212,7 +242,7 @@ IoT_DataPacket_t MiMain_GetStableData(IoT_DataPacket_t *pReference, IoT_DataPack
 	return StableData;
 }
 
-oRange_t MiMain_GetDataError(IoT_DataPacket_t *pReference, IoT_DataPacket_t *pCompare)
+oRange_t MiMain_GetArrayDataError(IoT_DataPacket_t *pReference, IoT_DataPacket_t *pCompare)
 {
 	oRange_t ragne = {3.402823466E+38, -3.402823466E+38};
 	double error;
@@ -231,12 +261,12 @@ oRange_t MiMain_GetDataError(IoT_DataPacket_t *pReference, IoT_DataPacket_t *pCo
 			IoTDataArrayDualTilt_t *ref = (IoTDataArrayDualTilt_t *)&pReference->Frame;
 			IoTDataArrayDualTilt_t *cmp = (IoTDataArrayDualTilt_t *)&pCompare->Frame;
 
-			error = MIIOT_DATA_DECODE_ANGLE(ref->Sensor[i].AxisX) - MIIOT_DATA_DECODE_ANGLE(cmp->Sensor[i].AxisX);
+			error = MIIOT_DATA_DECODE_ANGLE(ref->TiltArray[i].AxisX) - MIIOT_DATA_DECODE_ANGLE(cmp->TiltArray[i].AxisX);
 
 			ragne.Min = MATH_MIN(error, ragne.Min);
 			ragne.Max = MATH_MAX(error, ragne.Max);
 
-			error = MIIOT_DATA_DECODE_ANGLE(ref->Sensor[i].AxisY) - MIIOT_DATA_DECODE_ANGLE(cmp->Sensor[i].AxisY);
+			error = MIIOT_DATA_DECODE_ANGLE(ref->TiltArray[i].AxisY) - MIIOT_DATA_DECODE_ANGLE(cmp->TiltArray[i].AxisY);
 
 			ragne.Min = MATH_MIN(error, ragne.Min);
 			ragne.Max = MATH_MAX(error, ragne.Max);
@@ -249,7 +279,7 @@ oRange_t MiMain_GetDataError(IoT_DataPacket_t *pReference, IoT_DataPacket_t *pCo
 			IoTDataArraySingleTilt_t *ref = (IoTDataArraySingleTilt_t *)&pReference->Frame;
 			IoTDataArraySingleTilt_t *cmp = (IoTDataArraySingleTilt_t *)&pCompare->Frame;
 
-			error = MIIOT_DATA_DECODE_ANGLE(ref->Sensor[i].Axis) - MIIOT_DATA_DECODE_ANGLE(cmp->Sensor[i].Axis);
+			error = MIIOT_DATA_DECODE_ANGLE(ref->TiltArray[i].Axis) - MIIOT_DATA_DECODE_ANGLE(cmp->TiltArray[i].Axis);
 
 			ragne.Min = MATH_MIN(error, ragne.Min);
 			ragne.Max = MATH_MAX(error, ragne.Max);
@@ -265,6 +295,81 @@ oRange_t MiMain_GetDataError(IoT_DataPacket_t *pReference, IoT_DataPacket_t *pCo
 	while(++i < cnt);
 
 	return ragne;
+}
+
+/* TypeOfData 기반 오차 디스패처 — Array는 Min/Max 범위, Analog는 단일값(Min=Max) */
+oRange_t MiMain_GetMeasureError(IoT_DataPacket_t *pReference, IoT_DataPacket_t *pCompare);
+
+/* TypeOfData 기반 Stable 데이터 디스패처 */
+IoT_DataPacket_t MiMain_GetMeasureStableData(IoT_DataPacket_t *pReference, IoT_DataPacket_t *pPast, IoT_DataPacket_t *pNew);
+
+/* Analog 단일 채널(Channel[1]) 측정값 오차 */
+double MiMain_GetAnalogDataError(IoT_DataPacket_t *pReference, IoT_DataPacket_t *pCompare)
+{
+	if(!pReference || !pCompare ||
+	   pReference->TypeOfData != IoTDataType_Analog ||
+	   pCompare->TypeOfData != IoTDataType_Analog ||
+	   pReference->DLC == 0){
+		return 0;
+	}
+
+	IoTDataAnalog_t *ref = (IoTDataAnalog_t *)&pReference->Frame;
+	IoTDataAnalog_t *cmp = (IoTDataAnalog_t *)&pCompare->Frame;
+
+	/* Type 변경은 무조건 큰 오차로 판단 — 최대값 반환하여 재측정 유도 */
+	if(ref->Channel[1].Type != cmp->Channel[1].Type){
+		return 3.402823466E+38;
+	}
+
+	return (double)ref->Channel[1].Analog - (double)cmp->Channel[1].Analog;
+}
+
+/* Analog Best (오차 작은 쪽) 데이터 선택 */
+IoT_DataPacket_t MiMain_GetAnalogStableData(IoT_DataPacket_t *pReference, IoT_DataPacket_t *pPast, IoT_DataPacket_t *pNew)
+{
+	IoT_DataPacket_t StableData;
+	double errPast;
+	double errNew;
+
+	if(pReference->DLC == 0 || pReference->TypeOfData != pNew->TypeOfData){
+		return *pNew;
+	}
+
+	StableData.TypeOfData = pReference->TypeOfData;
+	StableData.DLC = pReference->DLC;
+
+	errPast = MATH_ABS(MiMain_GetAnalogDataError(pReference, pPast));
+	errNew  = MATH_ABS(MiMain_GetAnalogDataError(pReference, pNew));
+
+	IoTDataAnalog_t *stable = (IoTDataAnalog_t *)&StableData.Frame;
+	IoTDataAnalog_t *src    = (errNew < errPast) ? (IoTDataAnalog_t *)&pNew->Frame
+	                                             : (IoTDataAnalog_t *)&pPast->Frame;
+	stable->Channel[1].Type   = src->Channel[1].Type;
+	stable->Channel[1].Analog = src->Channel[1].Analog;
+	stable->Time = src->Time;
+
+	return StableData;
+}
+
+/* TypeOfData 기반 디스패처 — case 4 본문 변경 없이 Array/Analog 양쪽 지원 */
+oRange_t MiMain_GetMeasureError(IoT_DataPacket_t *pReference, IoT_DataPacket_t *pCompare)
+{
+	if(pReference && pReference->TypeOfData == IoTDataType_Analog){
+		double err = MiMain_GetAnalogDataError(pReference, pCompare);
+		oRange_t r;
+		r.Min = err;
+		r.Max = err;
+		return r;
+	}
+	return MiMain_GetArrayDataError(pReference, pCompare);
+}
+
+IoT_DataPacket_t MiMain_GetMeasureStableData(IoT_DataPacket_t *pReference, IoT_DataPacket_t *pPast, IoT_DataPacket_t *pNew)
+{
+	if(pReference && pReference->TypeOfData == IoTDataType_Analog){
+		return MiMain_GetAnalogStableData(pReference, pPast, pNew);
+	}
+	return MiMain_GetArrayStableData(pReference, pPast, pNew);
 }
 
 oResult_t MiMain_UpdateMeasure(IoT_DataPacket_t **ppPacket)
@@ -297,10 +402,17 @@ oResult_t MiMain_UpdateMeasure(IoT_DataPacket_t **ppPacket)
 			memset(&TryTimer, 0, sizeof(TryTimer));
 			memset(ChannelDone, 0, sizeof(ChannelDone));
 			memset(ConsistentCount, 0, sizeof(ConsistentCount));
+			memset(&SmaplingData, 0, sizeof(SmaplingData));
 			ChannelNo = 0;
 			UpdateMeasureStep++; // @suppress("No break at end of case")
 		case 1:
-			if(ChannelNo >= MEASUREMENT_CHANNEL_MAXCOUNT){
+			MiSerial_SensorSamplingProgress = (uint8_t)((float)ChannelNo/(float)MEASUREMENT_CHANNEL_MAXCOUNT*100);
+
+			if(MiSerial_UpdateSensorCmd && MiSerial_StopSensorCmd){
+				ChannelNo = 0;
+				result = RESULT_DONE;
+			}
+			else if(ChannelNo >= MEASUREMENT_CHANNEL_MAXCOUNT){
 				ChannelNo = 0;
 				result = RESULT_DONE;
 
@@ -310,7 +422,9 @@ oResult_t MiMain_UpdateMeasure(IoT_DataPacket_t **ppPacket)
 					}
 				}
 			}
-			else if((pConfig->TypeOfSensor == IoTSensorType_ArrayDualTilt || pConfig->TypeOfSensor == IoTSensorType_ArraySingleTilt) && pConfig->Properties.Array.CountOfSensor > 0){
+			else if(((pConfig->TypeOfSensor == IoTSensorType_ArrayDualTilt || pConfig->TypeOfSensor == IoTSensorType_ArraySingleTilt) && pConfig->Properties.Array.CountOfSensor > 0) ||
+			        pConfig->TypeOfSensor == IoTSensorType_mV ||
+			        pConfig->TypeOfSensor == IoTSensorType_mA){
 				SmaplingData.DLC = 0;
 				SmaplingData.TypeOfData = IoTDataType_NULL;
 				UpdateMeasureStep++;
@@ -331,13 +445,19 @@ oResult_t MiMain_UpdateMeasure(IoT_DataPacket_t **ppPacket)
 			}
 			break;
 		case 3:
-			switch(Measurement_Sensor(ChannelNo+1, &SmaplingData))
+			// Measurement_Sensor가 각 채널의 통합 측정값 단일 패킷 반환 — ChannelNo==0 시점만 호출, 이후 채널은 동일 SamplingData 사용
+			if(ChannelNo > 0){
+				UpdateMeasureStep++;
+				break;
+			}
+
+			switch(Measurement_Sensor(&SmaplingData))
 			{
 				case RESULT_OK:
 					UpdateMeasureStep++;
 					break;
 				case RESULT_ERROR:
-					UpdateMeasureStep = 5; // case 4(오차비교) 건너뜀
+				UpdateMeasureStep = 5; // case 4(오차비교) 건너뜀
 					oSerial_Log("UpdateMeasure", "sampling error | %s\r\n", MiIoT_SensorTypeToString(pConfig->TypeOfSensor));
 					break;
 				default:
@@ -347,29 +467,29 @@ oResult_t MiMain_UpdateMeasure(IoT_DataPacket_t **ppPacket)
 		case 4:
 			oRange_t error;
 
-			error = MiMain_GetDataError(&PastSampling[ChannelNo], &SmaplingData);
+			error = MiMain_GetMeasureError(&PastSampling[ChannelNo], &SmaplingData);
 
 			if(PastSampling[ChannelNo].DLC == 0 || (MATH_ABS(error.Min) <= pConfig->ErrorTolerance && MATH_ABS(error.Max) <= pConfig->ErrorTolerance) || pConfig->ErrorTolerance == 0 || pConfig->RetryCount <= 0){
-				//오차범위 내 데이터
+				//?ㅼ감踰붿쐞 ???곗씠??
 				*ppPacket = &SmaplingData;
 				PastSampling[ChannelNo] = SmaplingData;
 
 				ChannelDone[ChannelNo] = 1;
 			}
 			else {
-				//오차범위 초과 데이터
+				//?ㅼ감踰붿쐞 珥덇낵 ?곗씠??
 				if(TryCount[ChannelNo] > 0){
-					StableDataBuffer[ChannelNo] = MiMain_GetStableData(&PastSampling[ChannelNo], &StableDataBuffer[ChannelNo], &SmaplingData);
+					StableDataBuffer[ChannelNo] = MiMain_GetMeasureStableData(&PastSampling[ChannelNo], &StableDataBuffer[ChannelNo], &SmaplingData);
 
-					// 자기 일관성 검증: 새 측정값끼리 일치하는지 확인
-					oRange_t newVsLast = MiMain_GetDataError(&LastSamplingData[ChannelNo], &SmaplingData);
+					// 자기 일관성 검증 — 측정값끼리 일치하는지 확인
+					oRange_t newVsLast = MiMain_GetMeasureError(&LastSamplingData[ChannelNo], &SmaplingData);
 
 					if(MATH_ABS(newVsLast.Min) <= pConfig->ErrorTolerance && MATH_ABS(newVsLast.Max) <= pConfig->ErrorTolerance){
 						ConsistentCount[ChannelNo]++;
 						oSerial_Log("UpdateMeasure", "CH%d Consistent=%d", ChannelNo+1, ConsistentCount[ChannelNo]);
 
 						if(ConsistentCount[ChannelNo] >= 2){
-							// 연속 2회 일치 - 센서 실제 변화 확정
+							// 연속 2회 일치 — 센서 실제 변화로 확정
 							PastSampling[ChannelNo] = SmaplingData;
 							*ppPacket = &PastSampling[ChannelNo];
 							ChannelDone[ChannelNo] = 1;
@@ -391,7 +511,7 @@ oResult_t MiMain_UpdateMeasure(IoT_DataPacket_t **ppPacket)
 				TryTimer[ChannelNo] = oTMR_GetTick(TICKBASE_SYSTICK);
 				TryCount[ChannelNo]++;
 
-				error = MiMain_GetDataError(&PastSampling[ChannelNo], &StableDataBuffer[ChannelNo]);
+				error = MiMain_GetMeasureError(&PastSampling[ChannelNo], &StableDataBuffer[ChannelNo]);
 
 				if(TryCount[ChannelNo] >= pConfig->RetryCount || (MATH_ABS(error.Min) <= pConfig->ErrorTolerance && MATH_ABS(error.Max) <= pConfig->ErrorTolerance)){
 					PastSampling[ChannelNo] = StableDataBuffer[ChannelNo];
@@ -404,26 +524,14 @@ oResult_t MiMain_UpdateMeasure(IoT_DataPacket_t **ppPacket)
 			UpdateMeasureStep++;
 			break;
 		case 5:
+				// 채널 완료 직후 상위 RESULT_OK 반환(호출자 Mi_IoT)이 즉시 Mailbox 큐잉
+				// 전체 완료(RESULT_DONE)는 case 1에서 모든 ChannelDone 확인 후 처리
 			if(ChannelDone[ChannelNo]){
-				if(ChannelNo >= (MEASUREMENT_CHANNEL_MAXCOUNT-1)){
-					//재시도 횟수가 초과 했거나, 측정을 모두 완료 햇는지 확인
-					for(i=0; i<MEASUREMENT_CHANNEL_MAXCOUNT; i++){
-						if(!ChannelDone[i]){
-							result = RESULT_WAIT;
-						}
-					}
-
-					if(result != RESULT_WAIT){
-						result = RESULT_DONE;
-					}
-				}
-				else{
-					result = RESULT_OK;
-				}
+				result = RESULT_OK;
 			}
 
 			UpdateMeasureStep = 1;
-			ChannelNo = (ChannelNo+1) % MEASUREMENT_CHANNEL_MAXCOUNT;
+			ChannelNo++;
 			break;
 	}
 
@@ -444,7 +552,8 @@ oResult_t MiMain_UpdateSampling(IoT_DataPacket_t **ppPacket)
 {
 	static uint8_t UpdateSamplingStep = 0;
 	static uint8_t ChannelNo = 0;
-	static IoT_DataPacket_t SmaplingData;
+	static uint8_t SampliingIndex = 0;
+	static IoT_DataPacket_t SmaplingData[MEASUREMENT_CHANNEL_MAXCOUNT];
 	oResult_t result = RESULT_RUN;
 	IoTChannelConfig_t *pConfig;
 
@@ -457,33 +566,48 @@ oResult_t MiMain_UpdateSampling(IoT_DataPacket_t **ppPacket)
 		default:
 			UpdateSamplingStep = 0; // @suppress("No break at end of case")
 		case 0:
-			oSerial_Log("UpdateSampling", "start\r\n");
+			memset(SmaplingData, 0, sizeof(SmaplingData));
+
 			ChannelNo = 0;
+			SampliingIndex = 0;
 			UpdateSamplingStep++; // @suppress("No break at end of case")
+			oSerial_Log("UpdateSampling", "start\r\n");
 		case 1:
-			if(ChannelNo >= MEASUREMENT_CHANNEL_MAXCOUNT){
+			MiSerial_SensorSamplingProgress = (uint8_t)((float)ChannelNo/(float)MEASUREMENT_CHANNEL_MAXCOUNT*100);
+
+			if(MiSerial_UpdateSensorCmd && MiSerial_StopSensorCmd){
 				result = RESULT_DONE;
 			}
-			else if((pConfig->TypeOfSensor == IoTSensorType_ArrayDualTilt || pConfig->TypeOfSensor == IoTSensorType_ArraySingleTilt) && pConfig->Properties.Array.CountOfSensor > 0){
-				SmaplingData.DLC = 0;
-				SmaplingData.TypeOfData = IoTDataType_NULL;
+			else if(ChannelNo >= MEASUREMENT_CHANNEL_MAXCOUNT){
+				result = RESULT_DONE;
+			}
+			else if(((pConfig->TypeOfSensor == IoTSensorType_ArrayDualTilt || pConfig->TypeOfSensor == IoTSensorType_ArraySingleTilt) && pConfig->Properties.Array.CountOfSensor > 0) ||
+			        pConfig->TypeOfSensor == IoTSensorType_mV || pConfig->TypeOfSensor == IoTSensorType_mA){
+
+				SmaplingData[ChannelNo].DLC = 0;
+				SmaplingData[ChannelNo].TypeOfData = IoTDataType_NULL;
 				UpdateSamplingStep++;
 				oSerial_Log("UpdateSampling", "data sampling | %s\r\n", MiIoT_SensorTypeToString(pConfig->TypeOfSensor));
 			}
 			else{
-				ChannelNo++;
+				UpdateSamplingStep = 3;
 			}
 			break;
 		case 2:
-			switch(Measurement_Sensor(ChannelNo+1, &SmaplingData))
+			// Measurement_Sensor가 각 채널의 통합 측정값 단일 패킷 반환 — ChannelNo==0 시점만 호출
+			if(ChannelNo > 0){
+				UpdateSamplingStep = 3;
+				break;
+			}
+
+			switch(Measurement_Sensor(&SmaplingData[SampliingIndex]))
 			{
 				case RESULT_OK:
-					*ppPacket = &SmaplingData;
-					result = RESULT_OK;
-					UpdateSamplingStep++;
+					SampliingIndex++;
+					UpdateSamplingStep = 3;
 					break;
 				case RESULT_ERROR:
-					UpdateSamplingStep++;
+					UpdateSamplingStep = 3;
 					oSerial_Log("UpdateSampling", "sampling error | %s\r\n", MiIoT_SensorTypeToString(pConfig->TypeOfSensor));
 					break;
 				default:
@@ -491,6 +615,11 @@ oResult_t MiMain_UpdateSampling(IoT_DataPacket_t **ppPacket)
 			}
 			break;
 		case 3:
+			if(ChannelNo+1 == MEASUREMENT_CHANNEL_MAXCOUNT){
+				*ppPacket = &SmaplingData[0];
+				result = RESULT_OK;
+			}
+
 			UpdateSamplingStep = 1;
 			ChannelNo++;
 			break;

@@ -44,6 +44,8 @@ ADC_HandleTypeDef hadc1;
 
 CAN_HandleTypeDef hcan1;
 
+I2C_HandleTypeDef hi2c2;
+
 IWDG_HandleTypeDef hiwdg;
 
 UART_HandleTypeDef hlpuart1;
@@ -66,16 +68,6 @@ RTC_HandleTypeDef hrtc;
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-static void MX_GPIO_Init(void);
-static void MX_DMA_Init(void);
-static void MX_CAN1_Init(void);
-static void MX_LPUART1_UART_Init(void);
-static void MX_USART1_UART_Init(void);
-static void MX_USART3_UART_Init(void);
-static void MX_RTC_Init(void);
-static void MX_ADC1_Init(void);
-static void MX_IWDG_Init(void);
-static void MX_QUADSPI_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -121,6 +113,7 @@ int main(void)
   MX_ADC1_Init();
   MX_IWDG_Init();
   MX_QUADSPI_Init();
+  MX_I2C2_Init();
   /* USER CODE BEGIN 2 */
   /* USER CODE END 2 */
 
@@ -191,7 +184,7 @@ void SystemClock_Config(void)
   * @param None
   * @retval None
   */
-static void MX_ADC1_Init(void)
+void MX_ADC1_Init(void)
 {
 
   /* USER CODE BEGIN ADC1_Init 0 */
@@ -232,7 +225,7 @@ static void MX_ADC1_Init(void)
   * @param None
   * @retval None
   */
-static void MX_CAN1_Init(void)
+void MX_CAN1_Init(void)
 {
 
   /* USER CODE BEGIN CAN1_Init 0 */
@@ -265,11 +258,59 @@ static void MX_CAN1_Init(void)
 }
 
 /**
+  * @brief I2C2 Initialization Function
+  * @param None
+  * @retval None
+  */
+void MX_I2C2_Init(void)
+{
+
+  /* USER CODE BEGIN I2C2_Init 0 */
+
+  /* USER CODE END I2C2_Init 0 */
+
+  /* USER CODE BEGIN I2C2_Init 1 */
+
+  /* USER CODE END I2C2_Init 1 */
+  hi2c2.Instance = I2C2;
+  hi2c2.Init.Timing = 0x00503D58;
+  hi2c2.Init.OwnAddress1 = 0;
+  hi2c2.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c2.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c2.Init.OwnAddress2 = 0;
+  hi2c2.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
+  hi2c2.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c2.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Analogue filter
+  */
+  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c2, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Digital filter
+  */
+  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c2, 0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C2_Init 2 */
+
+  /* USER CODE END I2C2_Init 2 */
+
+}
+
+/**
   * @brief IWDG Initialization Function
   * @param None
   * @retval None
   */
-static void MX_IWDG_Init(void)
+void MX_IWDG_Init(void)
 {
 
   /* USER CODE BEGIN IWDG_Init 0 */
@@ -298,7 +339,7 @@ static void MX_IWDG_Init(void)
   * @param None
   * @retval None
   */
-static void MX_LPUART1_UART_Init(void)
+void MX_LPUART1_UART_Init(void)
 {
 
   /* USER CODE BEGIN LPUART1_Init 0 */
@@ -333,7 +374,7 @@ static void MX_LPUART1_UART_Init(void)
   * @param None
   * @retval None
   */
-static void MX_USART1_UART_Init(void)
+void MX_USART1_UART_Init(void)
 {
 
   /* USER CODE BEGIN USART1_Init 0 */
@@ -368,7 +409,7 @@ static void MX_USART1_UART_Init(void)
   * @param None
   * @retval None
   */
-static void MX_USART3_UART_Init(void)
+void MX_USART3_UART_Init(void)
 {
 
   /* USER CODE BEGIN USART3_Init 0 */
@@ -403,7 +444,7 @@ static void MX_USART3_UART_Init(void)
   * @param None
   * @retval None
   */
-static void MX_QUADSPI_Init(void)
+void MX_QUADSPI_Init(void)
 {
 
   /* USER CODE BEGIN QUADSPI_Init 0 */
@@ -438,7 +479,7 @@ static void MX_QUADSPI_Init(void)
   * @param None
   * @retval None
   */
-static void MX_RTC_Init(void)
+void MX_RTC_Init(void)
 {
 
   /* USER CODE BEGIN RTC_Init 0 */
@@ -502,7 +543,7 @@ static void MX_RTC_Init(void)
 /**
   * Enable DMA controller clock
   */
-static void MX_DMA_Init(void)
+void MX_DMA_Init(void)
 {
 
   /* DMA controller clock enable */
@@ -536,7 +577,7 @@ static void MX_DMA_Init(void)
   * @param None
   * @retval None
   */
-static void MX_GPIO_Init(void)
+void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
 /* USER CODE BEGIN MX_GPIO_Init_1 */
@@ -550,10 +591,10 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(DO_LED_OPERATING_GPIO_Port, DO_LED_OPERATING_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, DO_POWEROUT_5V_ENABLE_Pin|DO_LED_OPERATING_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, DO_LORA_ENABLE_Pin|DO_POWEROUT_CH_SELECT_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, DO_LORA_ENABLE_Pin|DO_POWEROUT_CH_SELECT_Pin|DO_AMP_ENALBE_Pin|DO_CURRENT_MODE_ENABLE_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(DO_PW_EXTCOM_GPIO_Port, DO_PW_EXTCOM_Pin, GPIO_PIN_SET);
@@ -569,6 +610,13 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, DO_POWEROUT_ENABLE_0_Pin|DO_POWEROUT_ENABLE_1_Pin, GPIO_PIN_SET);
+
+  /*Configure GPIO pin : DO_POWEROUT_5V_ENABLE_Pin */
+  GPIO_InitStruct.Pin = DO_POWEROUT_5V_ENABLE_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(DO_POWEROUT_5V_ENABLE_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : DO_LED_OPERATING_Pin */
   GPIO_InitStruct.Pin = DO_LED_OPERATING_Pin;
@@ -590,6 +638,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(DO_POWEROUT_CH_SELECT_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : DO_AMP_ENALBE_Pin DO_CURRENT_MODE_ENABLE_Pin */
+  GPIO_InitStruct.Pin = DO_AMP_ENALBE_Pin|DO_CURRENT_MODE_ENABLE_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pin : DO_PW_EXTCOM_Pin */
   GPIO_InitStruct.Pin = DO_PW_EXTCOM_Pin;

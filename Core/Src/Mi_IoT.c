@@ -44,8 +44,10 @@ char* MiIoT_DataTypeToString(IoTDataType_t Type)
 	{
 		case IoTDataType_NULL:
 			return "NULL";
-		case IoTDataType_DataArray:
-			return "DataArray";
+		case IoTDataType_DataArray_Type1:
+			return "DataArray_Type1";
+		case IoTDataType_DataArray_Type2:
+			return "DataArray_Type2";
 		case IoTDataType_ArrayDualTilt:
 			return "ArrayDualTilt";
 		case IoTDataType_ArraySingleTilt:
@@ -363,7 +365,6 @@ oResult_t MiIoT_UpdateSampling()
 			break;
 		case 3:
 			if(SamplingResult == RESULT_OK && pDataPacket != NULL && pDataPacket->TypeOfData != IoTDataType_NULL && pDataPacket->DLC){
-				MIIOT_DT_TO_IOTTIME(&MiIoT_DT, &pDataPacket->Frame);
 				MiSerial_PrintSensorData(pDataPacket);
 
 				if(MiLoRa_IsReachable){
@@ -377,6 +378,7 @@ oResult_t MiIoT_UpdateSampling()
 				case RESULT_DONE:
 					result = RESULT_DONE;
 					MiSerial_UpdateSensorCmd = 0;
+					MiSerial_StopSensorCmd = 0;
 					SamplingtStep = 0;
 					break;
 				case RESULT_WAIT:
@@ -390,6 +392,7 @@ oResult_t MiIoT_UpdateSampling()
 				default:
 					result = SamplingResult;
 					MiSerial_UpdateSensorCmd = 0;
+					MiSerial_StopSensorCmd = 0;
 					SamplingtStep = 0;
 					break;
 			}
@@ -461,10 +464,6 @@ oResult_t MiIoT_UpdateMeasurement()
 			if(MeasurementResult == RESULT_OK && pDataPacket != NULL && pDataPacket->TypeOfData != IoTDataType_NULL && pDataPacket->DLC){
 				MIIOT_DT_TO_IOTTIME(&MiIoT_MeasurementDT, &pDataPacket->Frame);
 
-				if(GPIOs.DI.UsbConnected){
-					MiSerial_PrintSensorData(pDataPacket);
-				}
-
 				//시리얼 번호 만큼 시간 옵셋을 줘서 lora data 겹치지 않게 한다.
 				if(MiIoT_Parameter.Information.SerialNo[6] > '0' && MiIoT_Parameter.Information.SerialNo[6] <= '9'){
 					MeasurementSendDelay = (uint32_t)(MiIoT_Parameter.Information.SerialNo[6] - '0') * SECOND_TO_MS(5);
@@ -493,6 +492,7 @@ oResult_t MiIoT_UpdateMeasurement()
 					MiIoT_MeasurementStep = 0;
 					break;
 			}
+			break;
 	}
 
 	return result;

@@ -36,6 +36,7 @@ extern uint32_t MiLoRa_OpenTimestamp;
 extern uint32_t MiLoRa_CloseTimestamp;
 
 extern void MiLoRa_ReceiveCallback(uint32_t Address, uint16_t DLC, uint8_t *Payload);
+extern uint32_t MiLoRa_Encode(IoT_MailboxItem_t *pMail, uint8_t SeqeunceCount, uint8_t *pOutData);
 extern oResult_t MiLoRa_SendMailbox(IoT_MailboxItem_t *pMail);
 extern void MiLoRa_Control();
 extern void MiLoRa_MailBoxTransmitScheduler();

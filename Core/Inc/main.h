@@ -51,6 +51,17 @@ extern "C" {
 
 /* Exported functions prototypes ---------------------------------------------*/
 void Error_Handler(void);
+void MX_GPIO_Init(void);
+void MX_DMA_Init(void);
+void MX_CAN1_Init(void);
+void MX_LPUART1_UART_Init(void);
+void MX_USART1_UART_Init(void);
+void MX_USART3_UART_Init(void);
+void MX_RTC_Init(void);
+void MX_ADC1_Init(void);
+void MX_IWDG_Init(void);
+void MX_QUADSPI_Init(void);
+void MX_I2C2_Init(void);
 
 /* USER CODE BEGIN EFP */
 
@@ -63,6 +74,8 @@ void Error_Handler(void);
 #define LPUART1_USB_TX_GPIO_Port GPIOC
 #define ADC_3V_BATTERY_Pin GPIO_PIN_2
 #define ADC_3V_BATTERY_GPIO_Port GPIOC
+#define DO_POWEROUT_5V_ENABLE_Pin GPIO_PIN_4
+#define DO_POWEROUT_5V_ENABLE_GPIO_Port GPIOA
 #define DO_LED_OPERATING_Pin GPIO_PIN_5
 #define DO_LED_OPERATING_GPIO_Port GPIOA
 #define UART3_LORA_TX_Pin GPIO_PIN_4
@@ -73,6 +86,10 @@ void Error_Handler(void);
 #define DO_LORA_ENABLE_GPIO_Port GPIOB
 #define DO_POWEROUT_CH_SELECT_Pin GPIO_PIN_10
 #define DO_POWEROUT_CH_SELECT_GPIO_Port GPIOB
+#define DO_AMP_ENALBE_Pin GPIO_PIN_12
+#define DO_AMP_ENALBE_GPIO_Port GPIOB
+#define DO_CURRENT_MODE_ENABLE_Pin GPIO_PIN_15
+#define DO_CURRENT_MODE_ENABLE_GPIO_Port GPIOB
 #define DO_PW_EXTCOM_Pin GPIO_PIN_8
 #define DO_PW_EXTCOM_GPIO_Port GPIOA
 #define UART1_EXTCOM_TX_Pin GPIO_PIN_9

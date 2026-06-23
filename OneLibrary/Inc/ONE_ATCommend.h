@@ -12,7 +12,7 @@
 #define AT_STRING_CR						"\r"
 #define AT_STRING_LF						"\n"
 
-#define AT_DMA_INDEX(pUART)					(((uint32_t)((pUART)->RxXferSize) - (pUART)->hdmarx->Instance->CNDTR))
+#define AT_DMA_INDEX(pUART)					(((uint32_t)((pUART)->RxXferSize) - ONE_DMA_GET_COUNTER((pUART)->hdmarx)))
 #define AT_TRANSMIT_BUFFER_COUNT(pAT)		((pAT)->IndexOfTxLast<(pAT)->IndexOfTxFirst ? ((pAT)->LengthOfBufferTx-(pAT)->IndexOfTxFirst+(pAT)->IndexOfTxLast) : ((pAT)->IndexOfTxLast-(pAT)->IndexOfTxFirst))
 #define AT_RECEIVE_BUFFER_COUNT(pAT)		((pAT)->IndexOfRxLast<(pAT)->IndexOfRxFirst ? ((pAT)->LengthOfBufferRx-(pAT)->IndexOfRxFirst+(pAT)->IndexOfRxLast) : ((pAT)->IndexOfRxLast-(pAT)->IndexOfRxFirst))
 #define AT_RECEIVE_BUFFER_ITEM(pAT, Index)	(char *)((pAT)->pBufferRx + (((pAT)->IndexOfRxFirst + (uint32_t)Index) % (pAT)->LengthOfBufferRx))

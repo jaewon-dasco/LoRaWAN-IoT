@@ -61,10 +61,20 @@ void MiSerial_PrintChannelConfig(int32_t Channel, IoTParameter_t *pParameter)
 				oSerial_Printf(&MiSerial_Handler, "\"SupplySource\" : \"%d\", ", (int)pParameter->ChannelConfig[i].SupplySource);
 				oSerial_Printf(&MiSerial_Handler, "\"RetryCount\" : \"%d\", ", (int)pParameter->ChannelConfig[i].RetryCount);
 				oSerial_Printf(&MiSerial_Handler, "\"RetryInterval\" : \"%d\", ", (int)pParameter->ChannelConfig[i].RetryInterval);
-				oSerial_Printf(&MiSerial_Handler, "\"ErrorTolerance\" : \"%.3f\", ", pParameter->ChannelConfig[i].ErrorTolerance);
-				oSerial_Printf(&MiSerial_Handler, "\"SensorId\" : \"%02X\", ", (int)(pParameter->ChannelConfig[i].Properties.Array.SensorId));
-				oSerial_Printf(&MiSerial_Handler, "\"SensorCount\" : \"%d\", ", (int)(pParameter->ChannelConfig[i].Properties.Array.CountOfSensor));
-				oSerial_Printf(&MiSerial_Handler, "\"DisableSensorBit\" : \"%08X\"", (int)(pParameter->ChannelConfig[i].Properties.Array.DisableSensorBit));
+
+				switch(pParameter->ChannelConfig[i].TypeOfSensor)
+				{
+					case IoTSensorType_mV:
+					case IoTSensorType_mA:
+						oSerial_Printf(&MiSerial_Handler, "\"ErrorTolerance\" : \"%.3f\"", pParameter->ChannelConfig[i].ErrorTolerance);
+						break;
+					default:
+						oSerial_Printf(&MiSerial_Handler, "\"ErrorTolerance\" : \"%.3f\", ", pParameter->ChannelConfig[i].ErrorTolerance);
+						oSerial_Printf(&MiSerial_Handler, "\"SensorId\" : \"0x%02X\", ", (int)(pParameter->ChannelConfig[i].Properties.Array.SensorId));
+						oSerial_Printf(&MiSerial_Handler, "\"SensorCount\" : \"%d\", ", (int)(pParameter->ChannelConfig[i].Properties.Array.CountOfSensor));
+						oSerial_Printf(&MiSerial_Handler, "\"DisableSensorBit\" : \"%08X\"", (int)(pParameter->ChannelConfig[i].Properties.Array.DisableSensorBit));
+						break;
+				}
 
 				oSerial_Printf(&MiSerial_Handler, "}");
 				cofigcount++;
@@ -81,10 +91,20 @@ void MiSerial_PrintChannelConfig(int32_t Channel, IoTParameter_t *pParameter)
 		oSerial_Printf(&MiSerial_Handler, "\"SupplySource\" : \"%d\",\r\n", (int)pParameter->ChannelConfig[i].SupplySource);
 		oSerial_Printf(&MiSerial_Handler, "\"RetryCount\" : \"%d\",\r\n", (int)pParameter->ChannelConfig[i].RetryCount);
 		oSerial_Printf(&MiSerial_Handler, "\"RetryInterval\" : \"%d\",\r\n", (int)pParameter->ChannelConfig[i].RetryInterval);
-		oSerial_Printf(&MiSerial_Handler, "\"ErrorTolerance\" : \"%.3f\",\r\n", pParameter->ChannelConfig[i].ErrorTolerance);
-		oSerial_Printf(&MiSerial_Handler, "\"SensorId\" : \"%02X\",\r\n", (int)(pParameter->ChannelConfig[i].Properties.Array.SensorId));
-		oSerial_Printf(&MiSerial_Handler, "\"SensorCount\" : \"%d\",\r\n", (int)(pParameter->ChannelConfig[i].Properties.Array.CountOfSensor));
-		oSerial_Printf(&MiSerial_Handler, "\"DisableSensorBit\" : \"%08X\"\r\n", (int)(pParameter->ChannelConfig[i].Properties.Array.DisableSensorBit));
+
+		switch(pParameter->ChannelConfig[i].TypeOfSensor)
+		{
+			case IoTSensorType_mV:
+			case IoTSensorType_mA:
+				oSerial_Printf(&MiSerial_Handler, "\"ErrorTolerance\" : \"%.3f\"\r\n", pParameter->ChannelConfig[i].ErrorTolerance);
+				break;
+			default:
+				oSerial_Printf(&MiSerial_Handler, "\"ErrorTolerance\" : \"%.3f\",\r\n", pParameter->ChannelConfig[i].ErrorTolerance);
+				oSerial_Printf(&MiSerial_Handler, "\"SensorId\" : \"0x%02X\",\r\n", (int)(pParameter->ChannelConfig[i].Properties.Array.SensorId));
+				oSerial_Printf(&MiSerial_Handler, "\"SensorCount\" : \"%d\",\r\n", (int)(pParameter->ChannelConfig[i].Properties.Array.CountOfSensor));
+				oSerial_Printf(&MiSerial_Handler, "\"DisableSensorBit\" : \"%08X\"\r\n", (int)(pParameter->ChannelConfig[i].Properties.Array.DisableSensorBit));
+				break;
+		}
 	}
 
 	oSerial_Printf(&MiSerial_Handler, "};\r\n");
@@ -109,15 +129,6 @@ oResult_t MiSerial_SetChannelConfig(char *Message, IoTParameter_t *pParameter, u
 			lVal = strtol(StrVal, &endptr, 10);
 			if(endptr != StrVal){
 				pChannelConfig->TypeOfSensor = (IoTSensorType_t)(lVal & 0xFF);
-
-				if(pChannelConfig->TypeOfSensor == IoTSensorType_Differential){
-					if(Channel % 3 == 0){
-						pParameter->ChannelConfig[Channel+1].TypeOfSensor = 0;
-					}
-					else if(Channel % 3 != 0){
-						pParameter->ChannelConfig[Channel].TypeOfSensor = 0;
-					}
-				}
 			}
 			else{
 				ErrorCount++;
@@ -174,44 +185,61 @@ oResult_t MiSerial_SetChannelConfig(char *Message, IoTParameter_t *pParameter, u
 			}
 		}
 
-		if(oJSON_GetValue(Message, "\"SensorId\"", StrVal, sizeof(StrVal))){
-			lVal = strtol(StrVal, &endptr, 16);
-			if(endptr != StrVal){
-				if(lVal >= 0 && lVal <= 255){
-					pChannelConfig->Properties.Array.SensorId = (uint16_t)(lVal);
+		switch(pChannelConfig->TypeOfSensor)
+		{
+			case IoTSensorType_NULL:
+				memset(pChannelConfig, 0, sizeof(*pChannelConfig));
+				break;
+			case IoTSensorType_mV:
+			case IoTSensorType_mA:
+				memset(&pChannelConfig->Properties, 0, sizeof(pChannelConfig->Properties));
+				break;
+			case IoTSensorType_ArrayDualTilt:
+			case IoTSensorType_ArraySingleTilt:
+				if(oJSON_GetValue(Message, "\"SensorId\"", StrVal, sizeof(StrVal))){
+					lVal = strtol(StrVal, &endptr, 16);
+					if(endptr != StrVal){
+						if(lVal >= 0 && lVal <= 255){
+							pChannelConfig->Properties.Array.SensorId = (uint16_t)(lVal);
+						}
+						else{
+							ErrorCount++;
+						}
+					}
+					else{
+						ErrorCount++;
+					}
 				}
-				else{
-					ErrorCount++;
-				}
-			}
-			else{
-				ErrorCount++;
-			}
-		}
 
-		if(oJSON_GetValue(Message, "\"SensorCount\"", StrVal, sizeof(StrVal))){
-			lVal = strtol(StrVal, &endptr, 10);
-			if(endptr != StrVal){
-				if(lVal >= 0){
-					pChannelConfig->Properties.Array.CountOfSensor = MATH_LIMIT((uint16_t)(lVal), 0, 60);
+				if(oJSON_GetValue(Message, "\"SensorCount\"", StrVal, sizeof(StrVal))){
+					lVal = strtol(StrVal, &endptr, 10);
+					if(endptr != StrVal){
+						if(lVal >= 0){
+							pChannelConfig->Properties.Array.CountOfSensor = MATH_LIMIT((uint16_t)(lVal), 0, 60);
+						}
+						else{
+							ErrorCount++;
+						}
+					}
+					else{
+						ErrorCount++;
+					}
 				}
-				else{
-					ErrorCount++;
-				}
-			}
-			else{
-				ErrorCount++;
-			}
-		}
 
-		if(oJSON_GetValue(Message, "\"DisableSensorBit\"", StrVal, sizeof(StrVal))){
-			llVal = strtoull(StrVal, &endptr, 16);
-			if(endptr != StrVal){
-				pChannelConfig->Properties.Array.DisableSensorBit = llVal;
-			}
-			else{
+				if(oJSON_GetValue(Message, "\"DisableSensorBit\"", StrVal, sizeof(StrVal))){
+					llVal = strtoull(StrVal, &endptr, 16);
+					if(endptr != StrVal){
+						pChannelConfig->Properties.Array.DisableSensorBit = llVal;
+					}
+					else{
+						ErrorCount++;
+					}
+				}
+				break;
+			default:
+				memset(pChannelConfig, 0, sizeof(*pChannelConfig));
 				ErrorCount++;
-			}
+				break;
 		}
 
 		if(pChannelConfig->SupplySource == 0){
@@ -223,67 +251,116 @@ oResult_t MiSerial_SetChannelConfig(char *Message, IoTParameter_t *pParameter, u
 }
 
 
+/* 단일 채널 데이터 본문 출력 함수 — 한 개의 "{...}" 형태 JSON object로 출력. comma/줄바꿈은 호출자가 처리 */
 void MiSerial_PrintSensorData(IoT_DataPacket_t *pPacket)
 {
-	int i;
-	uint32_t Count;
+	IoTDataSIC100_2C_t *pData;
+	IoTDateAndTime_t *pTime;
+	IoTSensorType_t tiltType;
+	IoTSensorType_t analogType;
+	uint8_t hasCh1, hasCh2;
+	uint8_t validCount;
+	uint8_t printedAny = 0;
+	uint8_t i;
+	uint8_t sensorCount;
 
-	if(pPacket == NULL || pPacket->DLC == 0 || pPacket->DLC < MIIOT_IOTDATA_SIZE_TIME || !GPIOs.DI.UsbConnected){
+	if(pPacket == NULL || !GPIOs.DI.UsbConnected){
 		return;
 	}
 
-	oSerial_Printf(&MiSerial_Handler, "{\r\n");
-	oSerial_Printf(&MiSerial_Handler, "\"Type\" : \"SensorData\",\r\n");
-	oSerial_Printf(&MiSerial_Handler, "\"Time\" : \"%04d-%02d-%02d %02d:%02d:%02d\",\r\n", (int)(((IoTDateAndTime_t *)&pPacket->Frame)->Year+2000), (int)((IoTDateAndTime_t *)&pPacket->Frame)->Month, (int)((IoTDateAndTime_t *)&pPacket->Frame)->Day, (int)((IoTDateAndTime_t *)&pPacket->Frame)->Hour, (int)((IoTDateAndTime_t *)&pPacket->Frame)->Minute, (int)((IoTDateAndTime_t *)&pPacket->Frame)->Second);
-
-	switch(pPacket->TypeOfData)
-	{
-		case IoTDataType_ArrayDualTilt:
-			Count = (pPacket->DLC - MIIOT_IOTDATA_SIZE_ARRAYDUALTILT(0)) / MIIOT_SENSORDATA_SIZE_TILT_DUAL;
-
-			oSerial_Printf(&MiSerial_Handler, "\"Channel\" : \"%d\",\r\n", (int)((IoTDataArrayDualTilt_t *)&pPacket->Frame)->Channel);
-			oSerial_Printf(&MiSerial_Handler, "\"Temp\" : \"%.2f\",\r\n", MIIOT_DATA_DECODE_TEMP(((IoTDataArrayDualTilt_t *)&pPacket->Frame)->Temperature));
-			oSerial_Printf(&MiSerial_Handler, "\"ArrayDualTilt\" : [\r\n");
-
-			for(i=0; i<Count; i++){
-				oSerial_Printf(&MiSerial_Handler, "{");
-				oSerial_Printf(&MiSerial_Handler, "\"X\" : \"%.3f\", ", MIIOT_DATA_DECODE_ANGLE(((IoTDataArrayDualTilt_t *)&pPacket->Frame)->Sensor[i].AxisX));
-				oSerial_Printf(&MiSerial_Handler, "\"Y\" : \"%.3f\"", MIIOT_DATA_DECODE_ANGLE(((IoTDataArrayDualTilt_t *)&pPacket->Frame)->Sensor[i].AxisY));
-				oSerial_Printf(&MiSerial_Handler, "}");
-
-				if(i<Count-1){
-					oSerial_Printf(&MiSerial_Handler, ",");
-				}
-
-				oSerial_Printf(&MiSerial_Handler, "\r\n");
-			}
-			break;
-
-		case IoTDataType_ArraySingleTilt:
-			Count = (pPacket->DLC - MIIOT_IOTDATA_SIZE_ARRAYSINGLETILT(0)) / MIIOT_SENSORDATA_SIZE_TILT_SINGLE;
-
-			oSerial_Printf(&MiSerial_Handler, "\"Channel\" : \"%d\",\r\n", (int)((IoTDataArraySingleTilt_t *)&pPacket->Frame)->Channel);
-			oSerial_Printf(&MiSerial_Handler, "\"Temp\" : \"%.2f\",\r\n", MIIOT_DATA_DECODE_TEMP(((IoTDataArraySingleTilt_t *)&pPacket->Frame)->Temperature));
-			oSerial_Printf(&MiSerial_Handler, "\"ArraySingleTilt\" : [\r\n");
-
-			for(i=0; i<Count; i++){
-				oSerial_Printf(&MiSerial_Handler, "{");
-				oSerial_Printf(&MiSerial_Handler, "\"Angle\" : \"%.3f\"", MIIOT_DATA_DECODE_ANGLE(((IoTDataArraySingleTilt_t *)&pPacket->Frame)->Sensor[i].Axis));
-				oSerial_Printf(&MiSerial_Handler, "}");
-
-				if(i<Count-1){
-					oSerial_Printf(&MiSerial_Handler, ",");
-				}
-
-				oSerial_Printf(&MiSerial_Handler, "\r\n");
-			}
-			break;
-
-		default:
-			break;
+	if(pPacket->TypeOfData != IoTDataType_DataArray_Type2 || pPacket->DLC == 0){
+		return;
 	}
 
-	oSerial_Printf(&MiSerial_Handler, "]\r\n");
+	pData = (IoTDataSIC100_2C_t *)&pPacket->Frame;
+	pTime = &pData->Time;
+	tiltType = pData->TiltArray.Type;
+	analogType = pData->Analog.Type;
+
+	hasCh1 = (tiltType == IoTSensorType_ArrayDualTilt || tiltType == IoTSensorType_ArraySingleTilt) ? 1 : 0;
+	hasCh2 = (analogType == IoTSensorType_mV || analogType == IoTSensorType_mA) ? 1 : 0;
+
+	validCount = hasCh1 + hasCh2;
+
+	if(validCount == 0){
+		return;
+	}
+
+/* Time은 첫 유효 함수 기준 — 같은 측정 사이클에서 채널 간 차이가 무시 가능 */
+	oSerial_Printf(&MiSerial_Handler, "{\r\n");
+	oSerial_Printf(&MiSerial_Handler, "\"Type\" : \"SensorData\",\r\n");
+	oSerial_Printf(&MiSerial_Handler, "\"Time\" : \"%04d-%02d-%02d %02d:%02d:%02d\",\r\n",
+		(int)(pTime->Year + 2000), (int)pTime->Month, (int)pTime->Day,
+		(int)pTime->Hour, (int)pTime->Minute, (int)pTime->Second);
+	oSerial_Printf(&MiSerial_Handler, "\"Count\" : \"%d\",\r\n", (int)validCount);
+	oSerial_Printf(&MiSerial_Handler, "\"DataArray\" : [\r\n");
+
+	/* Channel 1 - TiltArray. 센서 개수는 패킷에서 추론 — 마지막 non-zero entry index+1 */
+	if(hasCh1){
+		sensorCount = 0;
+
+		if(tiltType == IoTSensorType_ArrayDualTilt){
+			for(i=0; i<MIIOT_ARRAYSENSOR_MAX_COUNT; i++){
+				if(pData->TiltArray.Dual[i].AxisX != 0 || pData->TiltArray.Dual[i].AxisY != 0){
+					sensorCount = i + 1;
+				}
+			}
+		}
+		else{
+			for(i=0; i<MIIOT_ARRAYSENSOR_MAX_COUNT; i++){
+				if(pData->TiltArray.Single[i].Axis != 0){
+					sensorCount = i + 1;
+				}
+			}
+		}
+
+		oSerial_Printf(&MiSerial_Handler, "{\r\n");
+		oSerial_Printf(&MiSerial_Handler, "  \"Channel\" : \"1\",\r\n");
+		oSerial_Printf(&MiSerial_Handler, "  \"Type\" : \"%d\",\r\n", (int)tiltType);
+		oSerial_Printf(&MiSerial_Handler, "  \"SensorCount\" : \"%d\",\r\n", (int)sensorCount);
+		oSerial_Printf(&MiSerial_Handler, "  \"Data\" : [\r\n");
+		oSerial_Printf(&MiSerial_Handler, "    {\"Temp\" : \"%.2f\"}", MIIOT_DATA_DECODE_TEMP(pData->TiltArray.Temperature));
+
+		if(tiltType == IoTSensorType_ArrayDualTilt){
+			for(i=0; i<sensorCount; i++){
+				oSerial_Printf(&MiSerial_Handler, ",\r\n    {\"X\" : \"%.3f\", \"Y\" : \"%.3f\"}",
+					MIIOT_DATA_DECODE_ANGLE(pData->TiltArray.Dual[i].AxisX),
+					MIIOT_DATA_DECODE_ANGLE(pData->TiltArray.Dual[i].AxisY));
+			}
+		}
+		else{
+			for(i=0; i<sensorCount; i++){
+				oSerial_Printf(&MiSerial_Handler, ",\r\n    {\"Angle\" : \"%.3f\"}",
+					MIIOT_DATA_DECODE_ANGLE(pData->TiltArray.Single[i].Axis));
+			}
+		}
+
+		oSerial_Printf(&MiSerial_Handler, "\r\n  ]\r\n}");
+		printedAny = 1;
+	}
+
+	/* Channel 2 - Analog (mV or mA) */
+	if(hasCh2){
+		double decoded;
+
+		if(printedAny){
+			oSerial_Printf(&MiSerial_Handler, ",\r\n");
+		}
+
+		if(analogType == IoTSensorType_mA){
+			decoded = MIIOT_DATA_DECODE_mA(pData->Analog.Data);
+		}
+		else{
+			decoded = MIIOT_DATA_DECODE_mV(pData->Analog.Data);
+		}
+
+		oSerial_Printf(&MiSerial_Handler, "{\r\n");
+		oSerial_Printf(&MiSerial_Handler, "  \"Channel\" : \"2\",\r\n");
+		oSerial_Printf(&MiSerial_Handler, "  \"Type\" : \"%d\",\r\n", (int)analogType);
+		oSerial_Printf(&MiSerial_Handler, "  \"Data\" : \"%d\"\r\n}", (int)decoded);
+	}
+
+	oSerial_Printf(&MiSerial_Handler, "\r\n]\r\n");
 	oSerial_Printf(&MiSerial_Handler, "};\r\n");
 }
 
@@ -319,7 +396,7 @@ void MiSerial_Process()
 		}
 	}
 
-	if(MiSerial_IsScan && ScanCh < 2){
+	if(MiSerial_IsScan && ScanCh < 1){
 		if(MiIoT_Parameter.ChannelConfig[ScanCh].TypeOfSensor == IoTSensorType_NULL){
 			ScanCh++;
 		}

@@ -32,15 +32,27 @@ oResult_t MiIoT_IsValidParameter(IoTParameter_t *pParameter)
 
 	for(i=0; i<MIIOT_CHANNEL_MAXCOUNT; i++)
 	{
-		switch(pParameter->ChannelConfig[i].TypeOfSensor)
-		{
-			case IoTSensorType_Thermistor:
-			case IoTSensorType_ArrayDualTilt:
-			case IoTSensorType_ArraySingleTilt:
-				Enabled++;
-				break;
-			default:
-				break;
+		if(i==0){
+			switch(pParameter->ChannelConfig[i].TypeOfSensor)
+			{
+				case IoTSensorType_ArrayDualTilt:
+				case IoTSensorType_ArraySingleTilt:
+					Enabled++;
+					break;
+				default:
+					break;
+			}
+		}
+		else{
+			switch(pParameter->ChannelConfig[i].TypeOfSensor)
+			{
+				case IoTSensorType_mV:
+				case IoTSensorType_mA:
+					Enabled++;
+					break;
+				default:
+					break;
+			}
 		}
 	}
 
@@ -53,7 +65,7 @@ oResult_t MiIoT_IsSensorData(IoTProductType_t ProductCode, IoT_DataPacket_t *pPa
 		return RESULT_NULL;
 	}
 
-	if(pPayload->TypeOfData == IoTDataType_ArrayDualTilt || pPayload->TypeOfData == IoTDataType_ArraySingleTilt || pPayload->TypeOfData == IoTDataType_Tilt){
+	if(pPayload->TypeOfData == IoTDataType_ArrayDualTilt || pPayload->TypeOfData == IoTDataType_ArraySingleTilt || pPayload->TypeOfData == IoTDataType_Tilt || pPayload->TypeOfData == IoTDataType_Analog){
 		return RESULT_OK;
 	}
 

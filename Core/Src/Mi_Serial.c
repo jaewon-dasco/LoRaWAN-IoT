@@ -15,16 +15,21 @@
 #include "Mi_Serial.h"
 #include "ONE_Serial.h"
 
-oSerialHandler_t MiSerial_Handler = {NULL, NULL, 0, (uint8_t *)&MiSerial_RxBuffer, MISERIAL_RX_BUFFER_SIZE, 0,0,0,0};
-
 char StrBuffer[MISERIAL_RX_BUFFER_SIZE];
 uint8_t MiSerial_TxBuffer[MISERIAL_TX_BUFFER_SIZE];
 uint8_t MiSerial_RxBuffer[MISERIAL_RX_BUFFER_SIZE];
 
-uint8_t MiSerial_UpdateSensorCmd;
+uint8_t MiSerial_SensorSamplingProgress;
 uint8_t MiSerial_StopSensorCmd;
+uint8_t MiSerial_UpdateSensorCmd;
 uint8_t MiSerial_SamplingADCsTrig;
 
+oSerialHandler_t MiSerial_Handler = {
+	.pTxBuffer = MiSerial_TxBuffer,
+	.SizeOfTxBuffer = MISERIAL_TX_BUFFER_SIZE,
+	.pRxBuffer = MiSerial_RxBuffer,
+	.SizeOfRxBuffer = MISERIAL_RX_BUFFER_SIZE,
+};
 
 char* MiSerial_LoraStateString()
 {
@@ -92,6 +97,7 @@ void MiSerial_PrintResponse(char *Type, char *Message)
 oResult_t MiSerial_Set(char *Message)
 {
 	int ErrorCount = 0;
+	char *pStr;
 	char StrVal[125];
 	double dVal[4];
 	double dTmp;
@@ -314,18 +320,28 @@ oResult_t MiSerial_Set(char *Message)
 		return RESULT_OK;
 	}
 
-	if(strstr(Message, "\"Type\" : \"Save\"") != NULL)
-	{
-		if(MiStorage_ParameterSaveCmd == 0){
-			MiStorage_ParameterSaveCmd = 1;
-		}
+	if(strstr(Message, "\"Type\" : \"Save\"") != NULL){
+		MiStorage_ParameterSaveCmd = 1;
 		return RESULT_OK;
 	}
 
-	if(strstr(Message, "\"Type\" : \"Reset\"") != NULL)
-	{
+	if(strstr(Message, "\"Type\" : \"Reset\"") != NULL){
 		MiSerial_PrintResponse("Reset", "OK");
 		HAL_NVIC_SystemReset();
+
+		return RESULT_OK;
+	}
+
+	if((pStr = strstr(Message, "\"Type\" : \"Commend\"")) != NULL){
+		if(strstr(pStr, "\"Message\" : \"SensorDataStop\"") != NULL){
+			if(MiSerial_UpdateSensorCmd){
+				MiSerial_StopSensorCmd = 1;
+			}
+			MiSerial_PrintResponse("Commend", "OK");
+		}
+		else{
+			MiSerial_PrintResponse("Commend", "ERROR");
+		}
 
 		return RESULT_OK;
 	}
@@ -337,9 +353,21 @@ oResult_t MiSerial_Get(char *Message)
 {
 	char *pStr;
 
+	if(strstr(Message, "Get/SensorSamplingProgress") != NULL){
+		oSerial_Printf(&MiSerial_Handler, "{\r\n");
+		oSerial_Printf(&MiSerial_Handler, "\"Type\" : \"SensorSamplingProgress\",\r\n");
+		oSerial_Printf(&MiSerial_Handler, "\"Progress\" : \"%d\"\r\n", (int)MiSerial_SensorSamplingProgress);
+		oSerial_Printf(&MiSerial_Handler, "};\r\n");
+
+		return RESULT_OK;
+	}
+
 	if(strstr(Message, "Get/SensorData") != NULL){
 		if(MiIoT_IsValidParameter(&MiIoT_Parameter) == RESULT_OK){
-			MiSerial_UpdateSensorCmd = 1;
+			if(!MiSerial_UpdateSensorCmd){
+				MiSerial_StopSensorCmd = 0;
+				MiSerial_UpdateSensorCmd = 1;
+			}
 			MiSerial_PrintResponse("Get/SensorData", "OK");
 		}
 		else{
@@ -359,7 +387,7 @@ oResult_t MiSerial_Get(char *Message)
 	if(strstr(Message, "Get/DeviceInfo") != NULL){
 		oSerial_Printf(&MiSerial_Handler, "{\r\n");
 		oSerial_Printf(&MiSerial_Handler, "\"Type\" : \"DeviceInfo\",\r\n");
-		oSerial_Printf(&MiSerial_Handler, "\"SoftwareVersion\" : \"%.1f\",\r\n", MI_SW_REVISION);
+		oSerial_Printf(&MiSerial_Handler, "\"SoftwareVersion\" : \"%.2f\",\r\n", MI_SW_REVISION);
 		oSerial_Printf(&MiSerial_Handler, "\"ProductCode\" : \"%d\",\r\n", (int)MiIoT_Parameter.Information.ProductCode);
 		oSerial_Printf(&MiSerial_Handler, "\"SerialNo\" : \"%s\",\r\n", MiIoT_Parameter.Information.SerialNo);
 		oSerial_Printf(&MiSerial_Handler, "\"OperatingMode\" : \"%d\",\r\n", (int)MiIoT_Parameter.Operating.OperatingMode);
@@ -541,6 +569,10 @@ void MiSerial(UART_HandleTypeDef *pUART)
 
 		if(MiSerial_Handler.pUART->gState != HAL_UART_STATE_RESET){
 			HAL_UART_DeInit(MiSerial_Handler.pUART);
+		}
+
+		if(MiSerial_UpdateSensorCmd){
+			MiSerial_StopSensorCmd = 1;
 		}
 		return;
 	}

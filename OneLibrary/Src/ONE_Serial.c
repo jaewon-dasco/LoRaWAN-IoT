@@ -30,6 +30,87 @@ void oSerial_RxCpltCallback(struct __UART_HandleTypeDef *huart)
 	}
 }
 
+/* 링버퍼에서 wrap 안 넘는 연속 구간만 한 번에 송신.
+ *   - First + Count <= Size : Count 바이트 한 번에 (연속)
+ *   - First + Count >  Size : Size - First 바이트만 (wrap — 다음 콜백에서 나머지 송신)
+ * 호출 전제: IsTxBusy=1 이 외부에서 이미 설정됨. 실패 시 함수가 IsTxBusy=0 클리어. */
+static oResult_t oSerial_TransmitBuffer(oSerialHandler_t *pSerial)
+{
+	uint32_t size;
+	HAL_StatusTypeDef status;
+
+	if(pSerial->CountOfTxBuffer == 0){
+		pSerial->IsTxBusy = 0;
+		pSerial->TxChunkSize = 0;
+		return RESULT_DONE;
+	}
+
+	if(pSerial->IndexOfTxFirst + pSerial->CountOfTxBuffer > pSerial->SizeOfTxBuffer){
+		size = pSerial->SizeOfTxBuffer - pSerial->IndexOfTxFirst;   /* wrap: First~end 만 */
+	}
+	else{
+		size = pSerial->CountOfTxBuffer;                            /* 연속 */
+	}
+
+	pSerial->TxChunkSize = size;
+
+	if(pSerial->pUART->hdmatx){
+		status = HAL_UART_Transmit_DMA(pSerial->pUART, &pSerial->pTxBuffer[pSerial->IndexOfTxFirst], size);
+	}
+	else{
+		status = HAL_UART_Transmit_IT(pSerial->pUART, &pSerial->pTxBuffer[pSerial->IndexOfTxFirst], size);
+	}
+
+	if(status != HAL_OK){
+		pSerial->IsTxBusy = 0;
+		pSerial->TxChunkSize = 0;
+		pSerial->TxErrorCount++;
+		return RESULT_ERROR;
+	}
+	return RESULT_OK;
+}
+
+void oSerial_TxCpltCallback(struct __UART_HandleTypeDef *huart)
+{
+	oSerialHandler_t *pHandle;
+
+	for(int i=0; i<SERIAL_REGISTRY_MAXCOUNT; i++){
+		pHandle = SerialRegister[i];
+
+		if(!pHandle || pHandle->pUART != huart){
+			continue;
+		}
+
+		/* 완료된 chunk 만큼 consumer 포인터 전진 + 카운트 감소 */
+		pHandle->IndexOfTxFirst = (pHandle->IndexOfTxFirst + pHandle->TxChunkSize) % pHandle->SizeOfTxBuffer;
+		pHandle->CountOfTxBuffer -= pHandle->TxChunkSize;
+		pHandle->TxChunkSize = 0;
+		pHandle->TxCount++;
+
+		/* 잔여 데이터 있으면 다음 chunk 자동 시작, 없으면 IsTxBusy 클리어 */
+		if(pHandle->CountOfTxBuffer > 0){
+			oSerial_TransmitBuffer(pHandle);
+		}
+		else{
+			pHandle->IsTxBusy = 0;
+		}
+		break;
+	}
+}
+
+void oSerial_ErrorCallback(struct __UART_HandleTypeDef *huart)
+{
+	for(int i=0; i<SERIAL_REGISTRY_MAXCOUNT; i++){
+		if(SerialRegister[i] && SerialRegister[i]->pUART == huart){
+			if(SerialRegister[i]->IsTxBusy){
+				SerialRegister[i]->TxErrorCount++;
+			}
+			SerialRegister[i]->IsTxBusy = 0;
+			break;
+		}
+	}
+}
+
 void oSerial_ResetRegister(oSerialHandler_t *pSerial)
 {
 	if(!pSerial){
@@ -39,7 +120,14 @@ void oSerial_ResetRegister(oSerialHandler_t *pSerial)
 	for(int i=0; i<SERIAL_REGISTRY_MAXCOUNT; i++){
 		if(SerialRegister[i] == pSerial){
 			SerialRegister[i]->IsRegistered = 0;
+			SerialRegister[i]->IsTxBusy = 0;
+			SerialRegister[i]->IndexOfTxFirst = 0;
+			SerialRegister[i]->IndexOfTxLast = 0;
+			SerialRegister[i]->CountOfTxBuffer = 0;
+			SerialRegister[i]->TxChunkSize = 0;
 			SerialRegister[i]->pUART->RxCpltCallback = 0;
+			SerialRegister[i]->pUART->TxCpltCallback = 0;
+			SerialRegister[i]->pUART->ErrorCallback = 0;
 			SerialRegister[i] = 0;
 			break;
 		}
@@ -56,19 +144,26 @@ void oSerial_SetRegister(oSerialHandler_t *pSerial)
 		if(!SerialRegister[i] || SerialRegister[i] == pSerial){
 			SerialRegister[i] = pSerial;
 			SerialRegister[i]->IsRegistered = 1;
+			SerialRegister[i]->IsTxBusy = 0;
+			SerialRegister[i]->IndexOfTxFirst = 0;
+			SerialRegister[i]->IndexOfTxLast = 0;
+			SerialRegister[i]->CountOfTxBuffer = 0;
+			SerialRegister[i]->TxChunkSize = 0;
 			SerialRegister[i]->pUART->RxCpltCallback = oSerial_RxCpltCallback;
+			SerialRegister[i]->pUART->TxCpltCallback = oSerial_TxCpltCallback;
+			SerialRegister[i]->pUART->ErrorCallback  = oSerial_ErrorCallback;
 			break;
 		}
 	}
 }
 
-oResult_t oSerial_Write(oSerialHandler_t *pSerial, char *pBuffer, uint32_t SizeOfBuffer)
+oResult_t oSerial_Write(oSerialHandler_t *pSerial, char *pData, uint32_t SizeOfData)
 {
-	if(pSerial == NULL || pSerial->pUART == NULL){
-		return RESULT_ERROR;
-	}
+	uint32_t freeSpace;
+	uint8_t needStart;
+	HAL_StatusTypeDef status;
 
-	if(pSerial->pUART->gState != HAL_UART_STATE_READY){
+	if(pSerial == NULL || pSerial->pUART == NULL || pData == NULL || SizeOfData == 0){
 		return RESULT_ERROR;
 	}
 
@@ -76,22 +171,54 @@ oResult_t oSerial_Write(oSerialHandler_t *pSerial, char *pBuffer, uint32_t SizeO
 		oSerial_SetRegister(pSerial);
 	}
 
-	if(pSerial->pTxBuffer != NULL && pSerial->SizeOfTxBuffer > 0 ){
-		SizeOfBuffer = MATH_MIN(SizeOfBuffer, pSerial->SizeOfTxBuffer);
-		memcpy(pSerial->pTxBuffer, pBuffer, SizeOfBuffer);
+	/* TxBuffer 미설정 시 블로킹 송신 fallback */
+	if(pSerial->pTxBuffer == NULL || pSerial->SizeOfTxBuffer == 0){
+		status = HAL_UART_Transmit(pSerial->pUART, (uint8_t *)pData, SizeOfData, 1000);
+		if(status == HAL_OK){
+			pSerial->TxCount++;
+			return RESULT_OK;
+		}
+		pSerial->TxErrorCount++;
+		return RESULT_ERROR;
+	}
 
-		return HAL_UART_Transmit_DMA(pSerial->pUART, (uint8_t *)pSerial->pTxBuffer, SizeOfBuffer) == HAL_OK ? RESULT_OK : RESULT_ERROR;
+	/* === Critical: 링버퍼 상태 변경 (ISR과 공유) === */
+	__disable_irq();
+
+	freeSpace = pSerial->SizeOfTxBuffer - pSerial->CountOfTxBuffer;
+	if(SizeOfData > freeSpace){
+		__enable_irq();
+		return RESULT_BUSY;   /* 공간 부족 — 데이터 일부 적재 금지 (all-or-nothing) */
 	}
-	else{
-		return HAL_UART_Transmit(pSerial->pUART, (uint8_t *)pBuffer, SizeOfBuffer, 1000) == HAL_OK ? RESULT_OK : RESULT_ERROR;
+
+	/* 링버퍼 적재 — byte 단위 wrap 처리 */
+	for(uint32_t i = 0; i < SizeOfData; i++){
+		pSerial->pTxBuffer[pSerial->IndexOfTxLast] = (uint8_t)pData[i];
+		pSerial->IndexOfTxLast = (pSerial->IndexOfTxLast + 1) % pSerial->SizeOfTxBuffer;
 	}
+	pSerial->CountOfTxBuffer += SizeOfData;
+
+	/* DMA idle 이면 본 호출이 시작 책임. 진행 중이면 콜백이 자동으로 이어 송신. */
+	needStart = !pSerial->IsTxBusy;
+	if(needStart){
+		pSerial->IsTxBusy = 1;
+	}
+
+	__enable_irq();
+	/* === End critical === */
+
+	if(needStart){
+		return oSerial_TransmitBuffer(pSerial);
+	}
+
+	return RESULT_OK;
 }
 
-oResult_t oSerial_Read(oSerialHandler_t *pSerial, char *pBuffer, uint32_t SizeOfBuffer, uint32_t WaitDelay)
+oResult_t oSerial_Read(oSerialHandler_t *pSerial, char *pData, uint32_t SizeOfData, uint32_t WaitDelay)
 {
 	int cnt = 0;
 
-	if(pSerial == NULL || pBuffer == NULL || pSerial->pUART == NULL || pSerial->pRxBuffer == NULL || pSerial->SizeOfRxBuffer <= 0){
+	if(pSerial == NULL || pData == NULL || pSerial->pUART == NULL || pSerial->pRxBuffer == NULL || pSerial->SizeOfRxBuffer <= 0){
 		return RESULT_NULL;
 	}
 	else if(pSerial->pUART->gState == HAL_UART_STATE_RESET){
@@ -109,8 +236,8 @@ oResult_t oSerial_Read(oSerialHandler_t *pSerial, char *pBuffer, uint32_t SizeOf
 		}
 
 		if(pSerial->pUART->RxState == HAL_UART_STATE_READY){
-			if(pSerial->pUART->hdmarx->Init.Mode != DMA_CIRCULAR){
-				pSerial->pUART->hdmarx->Init.Mode = DMA_CIRCULAR;
+			if(!ONE_DMA_IS_CIRCULAR(pSerial->pUART->hdmarx)){
+				ONE_DMA_SET_CIRCULAR(pSerial->pUART->hdmarx);
 				HAL_DMA_Init(pSerial->pUART->hdmarx);
 			}
 
@@ -120,7 +247,7 @@ oResult_t oSerial_Read(oSerialHandler_t *pSerial, char *pBuffer, uint32_t SizeOf
 			}
 		}
 
-		pSerial->IndexOfRxLast = pSerial->pUART->RxXferSize - pSerial->pUART->hdmarx->Instance->CNDTR;
+		pSerial->IndexOfRxLast = pSerial->pUART->RxXferSize - ONE_DMA_GET_COUNTER(pSerial->pUART->hdmarx);
 	}
 	else{
 		/* 인터럽트 모드 */
@@ -154,27 +281,27 @@ oResult_t oSerial_Read(oSerialHandler_t *pSerial, char *pBuffer, uint32_t SizeOf
 		}
 	}
 
-	memset(pBuffer, 0, SizeOfBuffer);
+	memset(pData, 0, SizeOfData);
 
-	while(pSerial->IndexOfRxLast != pSerial->IndexOfRxFirst && cnt < SizeOfBuffer){
-		*pBuffer = *(pSerial->pRxBuffer + pSerial->IndexOfRxFirst);
+	while(pSerial->IndexOfRxLast != pSerial->IndexOfRxFirst && cnt < SizeOfData){
+		*pData = *(pSerial->pRxBuffer + pSerial->IndexOfRxFirst);
 		*(pSerial->pRxBuffer + pSerial->IndexOfRxFirst) = 0;
 
 		pSerial->IndexOfRxFirst = (pSerial->IndexOfRxFirst+1) % pSerial->SizeOfRxBuffer;
-		pBuffer++;
+		pData++;
 		cnt++;
 	}
 
 	return RESULT_OK;
 }
 
-oResult_t oSerial_ReadSplit(oSerialHandler_t *pSerial, char *pBuffer, uint32_t SizeOfBuffer, char *pSplitString)
+oResult_t oSerial_ReadSplit(oSerialHandler_t *pSerial, char *pData, uint32_t SizeOfData, char *pSplitString)
 {
 	char *pStr;
 	int32_t Cnt = 0;
 	int32_t SplitLength = 0;
 
-	if(pSerial == NULL || pBuffer == NULL || pSerial->pUART == NULL || pSerial->pRxBuffer == NULL || pSerial->SizeOfRxBuffer <= 0){
+	if(pSerial == NULL || pData == NULL || pSerial->pUART == NULL || pSerial->pRxBuffer == NULL || pSerial->SizeOfRxBuffer <= 0){
 		return RESULT_NULL;
 	}
 	else if(pSerial->pUART->gState == HAL_UART_STATE_RESET){
@@ -192,8 +319,8 @@ oResult_t oSerial_ReadSplit(oSerialHandler_t *pSerial, char *pBuffer, uint32_t S
 		}
 
 		if(pSerial->pUART->RxState == HAL_UART_STATE_READY){
-			if(pSerial->pUART->hdmarx->Init.Mode != DMA_CIRCULAR){
-				pSerial->pUART->hdmarx->Init.Mode = DMA_CIRCULAR;
+			if(!ONE_DMA_IS_CIRCULAR(pSerial->pUART->hdmarx)){
+				ONE_DMA_SET_CIRCULAR(pSerial->pUART->hdmarx);
 				HAL_DMA_Init(pSerial->pUART->hdmarx);
 			}
 
@@ -203,7 +330,7 @@ oResult_t oSerial_ReadSplit(oSerialHandler_t *pSerial, char *pBuffer, uint32_t S
 			}
 		}
 
-		pSerial->IndexOfRxLast = pSerial->pUART->RxXferSize - pSerial->pUART->hdmarx->Instance->CNDTR;
+		pSerial->IndexOfRxLast = pSerial->pUART->RxXferSize - ONE_DMA_GET_COUNTER(pSerial->pUART->hdmarx);
 	}
 	else{
 		/* 인터럽트 모드 */
@@ -263,10 +390,10 @@ oResult_t oSerial_ReadSplit(oSerialHandler_t *pSerial, char *pBuffer, uint32_t S
 	}
 
 	//copy to
-	memset(pBuffer, 0, SizeOfBuffer);
+	memset(pData, 0, SizeOfData);
 
-	while(pSerial->IndexOfRxFinder != pSerial->IndexOfRxFirst && Cnt < SizeOfBuffer){
-		*(pBuffer+Cnt) = *(pSerial->pRxBuffer + pSerial->IndexOfRxFirst);
+	while(pSerial->IndexOfRxFinder != pSerial->IndexOfRxFirst && Cnt < SizeOfData){
+		*(pData+Cnt) = *(pSerial->pRxBuffer + pSerial->IndexOfRxFirst);
 		*(pSerial->pRxBuffer + pSerial->IndexOfRxFirst) = 0;
 
 		pSerial->IndexOfRxFirst = (pSerial->IndexOfRxFirst+1) % pSerial->SizeOfRxBuffer;
@@ -274,7 +401,7 @@ oResult_t oSerial_ReadSplit(oSerialHandler_t *pSerial, char *pBuffer, uint32_t S
 	}
 
 	//remove split string
-	if(pSplitString != NULL && (pStr=strstr(pBuffer, pSplitString)) != NULL){
+	if(pSplitString != NULL && (pStr=strstr(pData, pSplitString)) != NULL){
 		memset(pStr, 0, SplitLength);
 	}
 
@@ -284,9 +411,9 @@ oResult_t oSerial_ReadSplit(oSerialHandler_t *pSerial, char *pBuffer, uint32_t S
 }
 
 
-oResult_t oSerial_ReadLine(oSerialHandler_t *pSerial, char *pBuffer, uint32_t SizeOfBuffer)
+oResult_t oSerial_ReadLine(oSerialHandler_t *pSerial, char *pData, uint32_t SizeOfData)
 {
-	return oSerial_ReadSplit(pSerial, pBuffer, SizeOfBuffer, "\r\n");
+	return oSerial_ReadSplit(pSerial, pData, SizeOfData, "\r\n");
 }
 
 void oSerial_PutChar(oSerialHandler_t *pSerial, char* pChar)

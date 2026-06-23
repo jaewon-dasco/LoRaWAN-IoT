@@ -385,6 +385,7 @@ oResult_t RAK3172_Transmit(uint8_t Port, uint8_t *pData, uint32_t SizeofData, ui
 					result = RESULT_FAULT;
 					goto EXIT;
 				}
+				pStr[SizeofData * 2] = '\0';	// 이전 송신 잔존 데이터 차단
 
 				RAK3172Dev.Status.IsTxDone = 0;
 				RAK3172Dev.Status.IsSendComformed = 0;
@@ -967,6 +968,7 @@ oResult_t RAK3172_SetConfig()
 oResult_t RAK3172_Open(UART_HandleTypeDef *pUART, DownlinkHandler_t DownlinkCallback)
 {
 	static uint8_t InitStep = 0;
+	static uint8_t CmdRetryCount = 0;
 	oResult_t result = RESULT_RUN;
 
 	RAK3172Dev.Config.NJM = 1;
@@ -999,6 +1001,7 @@ oResult_t RAK3172_Open(UART_HandleTypeDef *pUART, DownlinkHandler_t DownlinkCall
 
 			memset(&RAK3172Dev.Status, 0, sizeof(RAK3172Dev.Status));
 			RAK3172Dev.Status.IsOpening = 1;
+			CmdRetryCount = 0;
 
 			RAK3172Dev.AT.pUART = pUART;
 			RAK3172Dev.AT.ReceiveCallback = RAK3172_ReceiveCallback;
@@ -1029,7 +1032,21 @@ oResult_t RAK3172_Open(UART_HandleTypeDef *pUART, DownlinkHandler_t DownlinkCall
 				result = RESULT_ERROR;
 			}
 			break;
-		case 2:
+		case 2: // Wakeup: LPM 해제 시도 (첫 byte 가 wakeup 으로 손실될 수 있어 AT 대신 LPM=0 송신, 실패해도 다음 단계 진행)
+			switch(oAT_TransmitCommend(&RAK3172Dev.AT, "AT+LPM=0", "OK", 1000, 3, 1))
+			{
+				case AT_RESULT_RUN:
+					break;
+				case AT_RESULT_OK:
+					InitStep += 2;
+					break;
+				default:
+					oSerial_Log("RAK3172", "Commend fail | AT+LPM=0 (wakeup)");
+					InitStep++; // 실패해도 다음 단계로 진행 — AT 응답 여부로 최종 판정
+					break;
+			}
+			break;
+		case 3: // AT 응답 검증 — wakeup 후 모듈이 실제로 통신 가능한지 확인
 			switch(oAT_TransmitCommend(&RAK3172Dev.AT, "AT", "OK", 1000, 3, 1))
 			{
 				case AT_RESULT_RUN:
@@ -1046,7 +1063,7 @@ oResult_t RAK3172_Open(UART_HandleTypeDef *pUART, DownlinkHandler_t DownlinkCall
 					break;
 			}
 			break;
-		case 3:
+		case 4:
 			switch(oAT_TransmitCommend(&RAK3172Dev.AT, "ATE", "OK", 1000, 1, 1))
 			{
 				case AT_RESULT_RUN:
@@ -1057,21 +1074,29 @@ oResult_t RAK3172_Open(UART_HandleTypeDef *pUART, DownlinkHandler_t DownlinkCall
 					break;
 			}
 			break;
-		case 4:
-			switch(oAT_TransmitCommend(&RAK3172Dev.AT, "AT", "AT", 500, 3, 1))
+		case 5:
+			switch(oAT_TransmitCommend(&RAK3172Dev.AT, "AT", "AT", 500, 2, 1))
 			{
 				default:
 				case AT_RESULT_RUN:
 					break;
-				case AT_RESULT_OK:
-					InitStep--; //Echo check fail
+				case AT_RESULT_OK: //Echo 잡힘 → ATE 재시도, 단 누적 10회 초과 시 포기
+					if(++CmdRetryCount >= 10){
+						oSerial_Log("RAK3172", "ATE retry exceeded (%d) — proceed", CmdRetryCount);
+						CmdRetryCount = 0;
+						InitStep++; // 포기하고 다음 단계로
+					}
+					else{
+						InitStep--; //ATE 재시도
+					}
 					break;
 				case AT_RESULT_TIMEOUT:
+					CmdRetryCount = 0;
 					InitStep++; //Echo check ok
 					break;
 			}
 			break;
-		case 5: // LPM 해제 (Sleep 상태에서 재Open 시 AT 통신 보장)
+		case 6: // LPM 해제 재시도 (case 2 wakeup 이후 다시 sleep 진입 가능성 대비)
 			switch(oAT_TransmitCommend(&RAK3172Dev.AT, "AT+LPM=0", "OK", 1000, 5, 1))
 			{
 				case AT_RESULT_RUN:
@@ -1085,7 +1110,7 @@ oResult_t RAK3172_Open(UART_HandleTypeDef *pUART, DownlinkHandler_t DownlinkCall
 					break;
 			}
 			break;
-		case 6: //Get FW Version
+		case 7: //Get FW Version
 			switch(oAT_TransmitCommend(&RAK3172Dev.AT, "AT+VER=?", "VER=", 1000, 3, 1))
 			{
 				case AT_RESULT_RUN:
@@ -1104,8 +1129,9 @@ oResult_t RAK3172_Open(UART_HandleTypeDef *pUART, DownlinkHandler_t DownlinkCall
 					break;
 			}
 			break;
-		case 7: //Get LoRaWAN DevEUI
+		case 8: //Get LoRaWAN DevEUI
 			if(strlen(RAK3172Dev.Information.DevEUI) > 0){
+				CmdRetryCount = 0;
 				InitStep++;
 			}
 			else{
@@ -1117,7 +1143,12 @@ oResult_t RAK3172_Open(UART_HandleTypeDef *pUART, DownlinkHandler_t DownlinkCall
 						if(strlen(RAK3172Dev.AT.pResponseData) > 0){
 							strncpy(RAK3172Dev.Information.DevEUI, RAK3172Dev.AT.pResponseData, sizeof(RAK3172Dev.Information.DevEUI) - 1);
 							RAK3172Dev.Information.DevEUI[sizeof(RAK3172Dev.Information.DevEUI) - 1] = '\0';
+							CmdRetryCount = 0;
 							InitStep++;
+						}
+						else if(++CmdRetryCount >= 10){ //빈 응답 무한 루프 방지
+							oSerial_Log("RAK3172", "DEVEUI empty response exceeded (%d)", CmdRetryCount);
+							result = RESULT_ERROR;
 						}
 						break;
 					default:
@@ -1127,7 +1158,39 @@ oResult_t RAK3172_Open(UART_HandleTypeDef *pUART, DownlinkHandler_t DownlinkCall
 				}
 			}
 			break;
-		case 8: //Set LoRaWAN AppEUI
+		case 9: //Set LoRaWAN NWM (LoRa 통신 프로토콜 LoRaWAN Mode로 설정)
+			snprintf(TxStringBuffer, sizeof(TxStringBuffer), "AT+NWM=%d", RAK3172Dev.Config.NWM);
+
+			switch(oAT_TransmitCommend(&RAK3172Dev.AT, TxStringBuffer, "OK", 3000, 3, 1))
+			{
+				case AT_RESULT_RUN:
+					break;
+				case AT_RESULT_OK:
+					InitStep++;
+					break;
+				default:
+					oSerial_Log("RAK3172", "Commend fail | AT+NWM");
+					InitStep++; // 실패해도 진행 (이미 동일 값일 수 있음)
+					break;
+			}
+			break;
+		case 10: //Set LoRaWAN NJM (LoRaWAN Join Mode - OTAA 모드로 설정)
+			snprintf(TxStringBuffer, sizeof(TxStringBuffer), "AT+NJM=%d", RAK3172Dev.Config.NJM);
+
+			switch(oAT_TransmitCommend(&RAK3172Dev.AT, TxStringBuffer, "OK", 3000, 3, 1))
+			{
+				case AT_RESULT_RUN:
+					break;
+				case AT_RESULT_OK:
+					InitStep++;
+					break;
+				default:
+					oSerial_Log("RAK3172", "Commend fail | AT+NJM");
+					InitStep++; // 실패해도 진행
+					break;
+			}
+			break;
+		case 11: //Set LoRaWAN AppEUI
 			snprintf(TxStringBuffer, sizeof(TxStringBuffer), "AT+APPEUI=%s", RAK3172Dev.Information.AppEUI);
 
 			switch(oAT_TransmitCommend(&RAK3172Dev.AT, TxStringBuffer, "OK", 5000, 3, 1))
@@ -1143,7 +1206,7 @@ oResult_t RAK3172_Open(UART_HandleTypeDef *pUART, DownlinkHandler_t DownlinkCall
 					break;
 			}
 			break;
-		case 9: //Set LoRaWAN AppKEY
+		case 12: //Set LoRaWAN AppKEY
 			if(strlen(RAK3172Dev.Information.AppKEY) <= 0){
 				result = RESULT_NULL;
 			}
@@ -1164,7 +1227,7 @@ oResult_t RAK3172_Open(UART_HandleTypeDef *pUART, DownlinkHandler_t DownlinkCall
 				}
 			}
 			break;
-		case 10:
+		case 13:
 			if((result=RAK3172_SetConfig()) == RESULT_OK){
 				result = RESULT_RUN;
 				InitStep++;

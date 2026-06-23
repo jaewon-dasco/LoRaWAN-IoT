@@ -12,9 +12,8 @@
 #include "ONE_Serial.h"
 
 #define LORA_PAYLOAD_SIZE				51
-#define LORA_ANALOG_SPLIT_COUNT			5
-#define LORA_DUALANGLE_SPLIT_COUNT		5
-#define LORA_SINGLEANGLE_SPLIT_COUNT	8
+#define MILORA_JOIN_STABILIZE_MS		10000	// Join 후 라디오 link 안정화 대기 (첫 송신 손실 방지)
+/* 데이터 타입별 분할 상수와 MiLoRa_Encode 본문은 디바이스별 Mi_LoRa_<MODEL>.c 로 이동 */
 
 UART_HandleTypeDef *pLoRaUART = NULL;
 RAK3172_t *pLoRaDevice = &RAK3172Dev;
@@ -109,145 +108,6 @@ oResult_t MiLoRa_GenLoRaWANKey()
 	return RESULT_OK;
 }
 
-/* 메일박스 데이터를 LoRa 페이로드 크기(51B)에 맞게 시퀀스별로 분할 인코딩
- * SeqeunceCount: 현재 시퀀스 번호 (0부터 시작)
- * 반환: 인코딩된 바이트 수 (0이면 더 이상 전송할 데이터 없음)
- *
- * 분할 단위:
- *   Tilt/Status/Operating → 단일 시퀀스 (분할 없음)
- *   Analog               → 5채널씩 분할
- *   ArrayDualTilt         → 5노드씩 분할 (온도는 첫 시퀀스에만)
- *   ArraySingleTilt       → 8노드씩 분할 (온도는 첫 시퀀스에만) */
-uint32_t MiLoRa_Encode(IoT_MailboxItem_t *pMail, uint8_t SeqeunceCount, uint8_t *pOutData)
-{
-	uint32_t i;
-	uint32_t SizeofSended = 0;
-	uint32_t SizeofData = 0;
-
-	if(pMail == NULL){
-		return 0;
-	}
-
-	IoT_DataPacket_t *pPayload = &pMail->Payload;
-	uint8_t *pFrame = (uint8_t *)&pPayload->Frame;
-
-	switch(pPayload->TypeOfData)
-	{
-		default:	// 미지원 데이터 타입
-			SizeofData = 0;
-			break;
-
-		case IoTDataType_Tilt:		// 단일 시퀀스 전송 (분할 불필요)
-		case IoTDataType_Status:
-		case IoTDataType_Operating:
-			if(SeqeunceCount == 0){
-				memcpy(pOutData, pFrame, pPayload->DLC);
-				SizeofData += pPayload->DLC;
-			}
-			else{
-				SizeofData = 0;	// 시퀀스 0만 존재, 이후 전송 완료 신호
-			}
-			break;
-		case IoTDataType_Analog:	// 아날로그 채널: 시퀀스당 5채널씩 분할
-			SizeofSended = MIIOT_IOTDATA_SIZE_TIME + (SeqeunceCount * MIIOT_SENSORDATA_SIZE_ANALOG * LORA_ANALOG_SPLIT_COUNT);
-
-			if(SizeofSended >= pPayload->DLC){
-				SizeofData = 0;	// 모든 채널 전송 완료
-			}
-			else{
-				*(pOutData++) = SeqeunceCount;	// 시퀀스 번호 헤더
-				SizeofData++;
-
-				 //Copy to Time
-				memcpy(pOutData, pFrame, MIIOT_IOTDATA_SIZE_TIME);
-				pOutData += MIIOT_IOTDATA_SIZE_TIME;
-				pFrame += MIIOT_IOTDATA_SIZE_TIME;
-				SizeofData += MIIOT_IOTDATA_SIZE_TIME;
-
-				pFrame += SeqeunceCount * MIIOT_SENSORDATA_SIZE_ANALOG * LORA_ANALOG_SPLIT_COUNT;
-
-				for(i=0; i < LORA_ANALOG_SPLIT_COUNT && (i+(SeqeunceCount*LORA_ANALOG_SPLIT_COUNT)) < MIIOT_ANALOG_CH_MAX_COUNT; i++){
-					*((IoTSensorAnalog_t *)pOutData) = *((IoTSensorAnalog_t *)pFrame);
-					pOutData += MIIOT_SENSORDATA_SIZE_ANALOG;
-					pFrame += MIIOT_SENSORDATA_SIZE_ANALOG;
-					SizeofData += MIIOT_SENSORDATA_SIZE_ANALOG;
-				}
-			}
-			break;
-
-		case IoTDataType_ArrayDualTilt:	// 이중축 경사계 배열: 시퀀스당 5노드씩 분할
-			SizeofSended = MIIOT_IOTDATA_SIZE_TIME + 1 +MIIOT_SENSORDATA_SIZE_TEMP + (SeqeunceCount * MIIOT_SENSORDATA_SIZE_TILT_DUAL * LORA_DUALANGLE_SPLIT_COUNT);
-
-			if(SizeofSended >= pPayload->DLC){
-				SizeofData = 0;	// 모든 노드 전송 완료
-			}
-			else{
-				*(pOutData++) = SeqeunceCount;
-				SizeofData++;
-
-				//Copy to Time+Channel
-				memcpy(pOutData, pFrame, MIIOT_IOTDATA_SIZE_TIME+1);
-				pOutData += MIIOT_IOTDATA_SIZE_TIME + 1;
-				pFrame += MIIOT_IOTDATA_SIZE_TIME + 1;
-				SizeofData += MIIOT_IOTDATA_SIZE_TIME + 1;
-
-				if(SeqeunceCount == 0){	// 첫 시퀀스에만 온도 데이터 포함
-					*((IoTSensorTemp_t *)pOutData) = *((IoTSensorTemp_t *)pFrame);
-					pOutData += MIIOT_SENSORDATA_SIZE_TEMP;
-					pFrame += MIIOT_SENSORDATA_SIZE_TEMP;
-					SizeofData += MIIOT_SENSORDATA_SIZE_TEMP;
-				}
-				else{	// 후속 시퀀스는 온도 스킵, 해당 시퀀스 오프셋으로 이동
-					pFrame += MIIOT_SENSORDATA_SIZE_TEMP + (SeqeunceCount * MIIOT_SENSORDATA_SIZE_TILT_DUAL * LORA_DUALANGLE_SPLIT_COUNT);
-				}
-
-				for(i=0; i < LORA_DUALANGLE_SPLIT_COUNT && (i+(SeqeunceCount*LORA_DUALANGLE_SPLIT_COUNT)) < MIIOT_PAYLOAD_TO_DUALARRAY_COUNT(pPayload->DLC); i++){
-					*((IoTSensorTiltDual_t *)pOutData) = *((IoTSensorTiltDual_t *)pFrame);
-					pOutData += MIIOT_SENSORDATA_SIZE_TILT_DUAL;
-					pFrame += MIIOT_SENSORDATA_SIZE_TILT_DUAL;
-					SizeofData += MIIOT_SENSORDATA_SIZE_TILT_DUAL;
-				}
-			}
-			break;
-
-		case IoTDataType_ArraySingleTilt:	// 단축 경사계 배열: 시퀀스당 8노드씩 분할
-			SizeofSended = MIIOT_IOTDATA_SIZE_TIME + 1 + MIIOT_SENSORDATA_SIZE_TEMP + (SeqeunceCount * MIIOT_SENSORDATA_SIZE_TILT_SINGLE * LORA_SINGLEANGLE_SPLIT_COUNT);
-
-			if(SizeofSended >= pPayload->DLC){
-				SizeofData = 0;	// 모든 노드 전송 완료
-			}
-			else{
-				*(pOutData++) = SeqeunceCount;
-				SizeofData++;
-
-				//Copy to Time+Channel
-				memcpy(pOutData, pFrame, MIIOT_IOTDATA_SIZE_TIME+1);
-				pOutData += MIIOT_IOTDATA_SIZE_TIME + 1;
-				pFrame += MIIOT_IOTDATA_SIZE_TIME + 1;
-				SizeofData += MIIOT_IOTDATA_SIZE_TIME + 1;
-
-				if(SeqeunceCount == 0){
-					*((IoTSensorTemp_t *)pOutData) = *((IoTSensorTemp_t *)pFrame);
-					pOutData += MIIOT_SENSORDATA_SIZE_TEMP;
-					pFrame += MIIOT_SENSORDATA_SIZE_TEMP;
-					SizeofData += MIIOT_SENSORDATA_SIZE_TEMP;
-				}
-				else{
-					pFrame += MIIOT_SENSORDATA_SIZE_TEMP + (SeqeunceCount * MIIOT_SENSORDATA_SIZE_TILT_SINGLE * LORA_SINGLEANGLE_SPLIT_COUNT);
-				}
-
-				for(i=0; i < LORA_SINGLEANGLE_SPLIT_COUNT && (i+(SeqeunceCount*LORA_SINGLEANGLE_SPLIT_COUNT)) < MIIOT_PAYLOAD_TO_SINGLEARRAY_COUNT(pPayload->DLC); i++){
-					*((IoTSensorTiltSingle_t *)pOutData) = *((IoTSensorTiltSingle_t *)pFrame);
-					pOutData += MIIOT_SENSORDATA_SIZE_TILT_SINGLE;
-					pFrame += MIIOT_SENSORDATA_SIZE_TILT_SINGLE;
-					SizeofData += MIIOT_SENSORDATA_SIZE_TILT_SINGLE;
-				}
-			}
-			break;
-	}
-
-	return SizeofData;
-}
 
 /*
  * MiLoRa_SendMailbox - 메일박스 아이템을 LoRa로 전송하는 비동기 상태머신
@@ -279,6 +139,7 @@ oResult_t MiLoRa_SendMailbox(IoT_MailboxItem_t *pMail)
 	static uint8_t SendSqcCount = 0;		// 현재까지 전송 완료된 시퀀스 번호
 	static uint8_t SendErrorCount = 0;		// 현재 시퀀스의 연속 전송 실패 횟수
 	static uint8_t SendFaultCount = 0;		// 라디오 Fault 연속 횟수 (10회 시 RESULT_FAULT)
+	static uint8_t SendTryCount = 0;
 	static uint8_t SendBuffer[LORA_PAYLOAD_SIZE] = {0,};
 	static uint8_t SendBufferSize;
 	oResult_t result = RESULT_RUN;
@@ -312,6 +173,7 @@ oResult_t MiLoRa_SendMailbox(IoT_MailboxItem_t *pMail)
 		case 1: // 시퀀스 인코딩 - 대용량 데이터를 LoRa 페이로드 크기로 분할
 			if((SendBufferSize = MiLoRa_Encode(pMail, SendSqcCount, (uint8_t *)&SendBuffer)) > 0){
 				SendMailboxStep++;	// 인코딩 성공 → 전송 대기로
+				SendErrorCount = 0;	// 새 시퀀스 시작 → QoS 재시도 카운트 리셋
 			}
 			else if(SendSqcCount > 0){
 				result = RESULT_OK;	// 더 이상 인코딩할 데이터 없음 → 전체 전송 완료
@@ -321,13 +183,16 @@ oResult_t MiLoRa_SendMailbox(IoT_MailboxItem_t *pMail)
 				result = RESULT_NULL;	// 첫 시퀀스부터 인코딩 실패 → 데이터 형식 오류
 				oSerial_Log("MiLoRa", "Mailbox encode error");
 			}
+
+			SendTryCount = 0;
+			SendSqcTimer = oTMR_GetTick(TICKBASE_SYSTICK);
 			break;
-		case 2: // 시퀀스 간 전송 간격 대기 (5초, LoRa duty cycle)
-			if(SendSqcTimer == 0 || oTMR_Elapsed(&SendSqcTimer, SECOND_TO_MS(5), TICKBASE_SYSTICK)){
+		case 2: // 전송 대기 - 시퀀스 간격 또는 실패 시 백오프 (5초 × SendTryCount)
+			if(SendTryCount == 0 || oTMR_Elapsed(&SendSqcTimer, SECOND_TO_MS(5) * MATH_MAX(SendTryCount, 1), TICKBASE_SYSTICK)){
 				SendMailboxStep++;
-				SendSqcTimer = oTMR_GetTick(TICKBASE_SYSTICK);
+				SendTryCount++;
 				SendFaultCount = 0;
-				SendErrorCount = 0;
+				oSerial_Log("MiLoRa", "Mailbox transmit SQC=%d try=%d", (int)SendSqcCount, (int)SendTryCount);
 			}
 			break;
 		case 3: // RF 전송 - RAK3172 AT+SEND 실행
@@ -343,13 +208,15 @@ oResult_t MiLoRa_SendMailbox(IoT_MailboxItem_t *pMail)
 					break;
 				case RESULT_TIMEOUT:
 				case RESULT_ERROR:	// 전송 실패 → QoS 재시도
-					oSerial_Log("MiLoRa", "Mailbox sent error");
+					SendMailboxStep = 2;
+					SendSqcTimer = oTMR_GetTick(TICKBASE_SYSTICK);
 					MiLoRa_RadioFailCount++;	// 누적 5회 초과 시 MiLoRa_Control에서 LoRa 리셋
 
 					// QoS 횟수만큼 재시도 후 전송된 것으로 간주하고 다음 시퀀스로 이동
-					if(++SendErrorCount >= MATH_MIN(pMail->QoS, 5)){
+					if(++SendErrorCount >= MATH_MIN(pMail->QoS, 10)){
 						SendSqcCount++;
 						SendMailboxStep = 1;
+						oSerial_Log("MiLoRa", "Mailbox sent error");
 					}
 					break;
 				default:			// 라디오 비정상 응답 (RESULT_NULL, RESULT_FAULT 등)
@@ -532,12 +399,16 @@ void MiLoRa_MailBoxTransmitScheduler()
 				MiLoRa_IsMailBoxReady = 0;
 			}
 			break;
-		case 1: // LoRa Open + Wakeup 완료 대기
+		case 1: // LoRa Open + Wakeup 완료 대기 + Join 안정화 대기
 			if(!MiLoRa_IsOpen){
 				break;	// Open 미완료 → 대기
 			}
 			if(RAK3172Dev.Status.IsSleeping){
 				break;	// Sleep 중 → Control()에서 Wakeup 완료까지 대기
+			}
+			// Join/Open 직후 N초 안정화 대기 — 라디오 link 안정화로 첫 송신 손실 방지
+			if(!oTMR_Elapsed(&MiLoRa_OpenTimestamp, MILORA_JOIN_STABILIZE_MS, TICKBASE_SYSTICK)){
+				break;
 			}
 			MiLoRa_ScheduleStep++;
 			break;
@@ -584,8 +455,7 @@ oResult_t MiLoRa_Sleep(uint8_t Enable)
 		// LPM 성공 후 IORun=0 되면 MCU도 STOP 진입 (의도된 동작)
 		if((result = RAK3172_Sleep()) == RESULT_OK){
 			MiLoRa_RadioFailCount = 0;
-			MiLoRa_IsBusy = 0;
-			MiLoRa_IsSleep = 1;
+			MiLoRa_IsBusy = 0;			
 		}
 	}
 	else{
