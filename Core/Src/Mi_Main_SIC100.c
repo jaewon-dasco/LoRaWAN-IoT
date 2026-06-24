@@ -384,6 +384,7 @@ oResult_t MiMain_UpdateMeasure(IoT_DataPacket_t **ppPacket)
 	static uint8_t ConsistentCount[MEASUREMENT_CHANNEL_MAXCOUNT] = {0,};
 	static IoT_DataPacket_t LastSamplingData[MEASUREMENT_CHANNEL_MAXCOUNT];
 	static uint32_t TryTimer[MEASUREMENT_CHANNEL_MAXCOUNT] = {0,};
+	static uint8_t TotalActiveChannels = 0;	/* 진행률 분모 — 활성 채널 총 개수 */
 	uint32_t i;
 	oResult_t result = RESULT_RUN;
 	IoTChannelConfig_t *pConfig;
@@ -404,12 +405,29 @@ oResult_t MiMain_UpdateMeasure(IoT_DataPacket_t **ppPacket)
 			memset(ConsistentCount, 0, sizeof(ConsistentCount));
 			memset(&SmaplingData, 0, sizeof(SmaplingData));
 			ChannelNo = 0;
+			MiSerial_SensorSamplingProgress = 0;
+
+			TotalActiveChannels = 0;
+			for(i=0; i<MEASUREMENT_CHANNEL_MAXCOUNT; i++){
+				if(MiIoT_Parameter.ChannelConfig[i].TypeOfSensor != IoTSensorType_NULL){
+					TotalActiveChannels++;
+				}
+			}
 			UpdateMeasureStep++; // @suppress("No break at end of case")
-		case 1:
-			MiSerial_SensorSamplingProgress = (uint8_t)((float)ChannelNo/(float)MEASUREMENT_CHANNEL_MAXCOUNT*100);
+		case 1: {
+			uint8_t done = 0;
+			for(i=0; i<MEASUREMENT_CHANNEL_MAXCOUNT; i++){
+				if(MiIoT_Parameter.ChannelConfig[i].TypeOfSensor != IoTSensorType_NULL && ChannelDone[i]){
+					done++;
+				}
+			}
+			MiSerial_SensorSamplingProgress = (TotalActiveChannels > 0)
+				? MATH_LIMIT((uint8_t)((float)done/(float)TotalActiveChannels*99), 0, 99)
+				: 99;
 
 			if(MiSerial_UpdateSensorCmd && MiSerial_StopSensorCmd){
 				ChannelNo = 0;
+				MiSerial_SensorSamplingProgress = 100;
 				result = RESULT_DONE;
 			}
 			else if(ChannelNo >= MEASUREMENT_CHANNEL_MAXCOUNT){
@@ -420,6 +438,10 @@ oResult_t MiMain_UpdateMeasure(IoT_DataPacket_t **ppPacket)
 					if(!ChannelDone[i]){
 						result = RESULT_WAIT;
 					}
+				}
+
+				if(result == RESULT_DONE){
+					MiSerial_SensorSamplingProgress = 100;
 				}
 			}
 			else if(((pConfig->TypeOfSensor == IoTSensorType_ArrayDualTilt || pConfig->TypeOfSensor == IoTSensorType_ArraySingleTilt) && pConfig->Properties.Array.CountOfSensor > 0) ||
@@ -434,6 +456,7 @@ oResult_t MiMain_UpdateMeasure(IoT_DataPacket_t **ppPacket)
 				ChannelNo++;
 			}
 			break;
+		}
 		case 2:
 			if(pConfig->RetryCount && (ChannelDone[ChannelNo] || !oTMR_Elapsed(&TryTimer[ChannelNo], SECOND_TO_MS(pConfig->RetryInterval), TICKBASE_SYSTICK))){
 				UpdateMeasureStep = 1;
@@ -553,6 +576,8 @@ oResult_t MiMain_UpdateSampling(IoT_DataPacket_t **ppPacket)
 	static uint8_t UpdateSamplingStep = 0;
 	static uint8_t ChannelNo = 0;
 	static uint8_t SampliingIndex = 0;
+	static uint8_t SampledActiveCount = 0;	/* 진행률 — 측정 시도된 활성 채널 수 */
+	static uint8_t TotalActiveChannels = 0;	/* 진행률 분모 — 활성 채널 총 개수 */
 	static IoT_DataPacket_t SmaplingData[MEASUREMENT_CHANNEL_MAXCOUNT];
 	oResult_t result = RESULT_RUN;
 	IoTChannelConfig_t *pConfig;
@@ -570,15 +595,29 @@ oResult_t MiMain_UpdateSampling(IoT_DataPacket_t **ppPacket)
 
 			ChannelNo = 0;
 			SampliingIndex = 0;
+			SampledActiveCount = 0;
+			MiSerial_SensorSamplingProgress = 0;
+
+			TotalActiveChannels = 0;
+			for(uint8_t k=0; k<MEASUREMENT_CHANNEL_MAXCOUNT; k++){
+				if(MiIoT_Parameter.ChannelConfig[k].TypeOfSensor != IoTSensorType_NULL){
+					TotalActiveChannels++;
+				}
+			}
+
 			UpdateSamplingStep++; // @suppress("No break at end of case")
 			oSerial_Log("UpdateSampling", "start\r\n");
 		case 1:
-			MiSerial_SensorSamplingProgress = (uint8_t)((float)ChannelNo/(float)MEASUREMENT_CHANNEL_MAXCOUNT*100);
+			MiSerial_SensorSamplingProgress = (TotalActiveChannels > 0)
+				? MATH_LIMIT((uint8_t)((float)SampledActiveCount/(float)TotalActiveChannels*99), 0, 99)
+				: 99;
 
 			if(MiSerial_UpdateSensorCmd && MiSerial_StopSensorCmd){
+				MiSerial_SensorSamplingProgress = 100;
 				result = RESULT_DONE;
 			}
 			else if(ChannelNo >= MEASUREMENT_CHANNEL_MAXCOUNT){
+				MiSerial_SensorSamplingProgress = 100;
 				result = RESULT_DONE;
 			}
 			else if(((pConfig->TypeOfSensor == IoTSensorType_ArrayDualTilt || pConfig->TypeOfSensor == IoTSensorType_ArraySingleTilt) && pConfig->Properties.Array.CountOfSensor > 0) ||
@@ -586,6 +625,7 @@ oResult_t MiMain_UpdateSampling(IoT_DataPacket_t **ppPacket)
 
 				SmaplingData[ChannelNo].DLC = 0;
 				SmaplingData[ChannelNo].TypeOfData = IoTDataType_NULL;
+				SampledActiveCount++;
 				UpdateSamplingStep++;
 				oSerial_Log("UpdateSampling", "data sampling | %s\r\n", MiIoT_SensorTypeToString(pConfig->TypeOfSensor));
 			}
