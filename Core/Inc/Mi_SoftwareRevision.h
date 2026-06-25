@@ -117,6 +117,18 @@
 2026-06-23 | HW 2.4 | FW 0.96 (continued)
 	- MiSerial_Handler 초기화 designated initializer로 수정 (pRxBuffer가 IndexOfTxFirst에 박히던 버그 해결)
 	- 측정 자기 일관성 검증 추가: 직전값과 ErrorTolerance 내 연속 2회 일치 시 즉시 ChannelDone
+2026-06-24 | HW 2.4 | FW 0.96 (continued)
+	- ONE_Serial TX 비동기 송신 안정화 (PHM 검증 후 전 프로젝트 동기화):
+	  · oSerial_PutChar / vPrint / Printf / PrintLine: gState != READY 가드 제거
+	    (DMA TX 진행 중 후속 출력 silent drop 버그 수정)
+	  · oSerial_Write fallback: pTxBuffer NULL 또는 SizeOfTxBuffer < 50 시 blocking 전송
+	  · 링버퍼 적재/콜백에 __disable_irq() / __enable_irq() critical section 추가
+	- MISERIAL_TX_BUFFER_SIZE: 1 → 1000 (DMA 링버퍼 비동기 송신 활성화)
+2026-06-25 | HW 2.4 | FW 0.96 (continued)
+	- ONE_Serial DMA race 수정 + 송신 효율 개선:
+	  · oSerial_vPrint/PrintLine/Log: char-by-char → vsnprintf 한 번에 oSerial_Write (256B 로컬 버퍼)
+	  · oSerial_Write txInProgress 판정: HW state만 → IsTxBusy(SW) || hwBusy 결합
+	    (DMA 종료~콜백 race window 에서 청크 재전송되던 버그 해결)
 */
 
 #endif /* INC_MI_SOFTWAREREVISION_H_ */
