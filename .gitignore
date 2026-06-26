@@ -1,0 +1,41 @@
+# STM32CubeIDE Build Output
+Debug/
+Release/
+*.o
+*.d
+*.elf
+*.bin
+*.hex
+*.list
+*.map
+*.cyclo
+*.su
+*.lst
+
+# IDE Settings
+.settings/
+.project
+.cproject
+.mxproject
+
+# IDE workspace
+.metadata/
+*.launch
+RemoteSystemsTempFiles/
+
+# Claude Code
+.claude/
+
+# Project backup zips
+WORK_*.zip
+*.zip
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Editor swap/backup
+*.swp
+*.swo
+*~
+*.bak

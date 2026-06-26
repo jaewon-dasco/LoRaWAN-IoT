@@ -1,0 +1,10 @@
+{
+  "vibration-ppv-algorithm": {
+    "phase": "design",
+    "matchRate": null,
+    "iterationCount": 0,
+    "startedAt": "2026-03-27T00:00:00Z",
+    "planDoc": "docs/01-plan/features/vibration-ppv-algorithm.plan.md",
+    "designDoc": "docs/02-design/features/vibration-ppv-algorithm.design.md"
+  }
+}
