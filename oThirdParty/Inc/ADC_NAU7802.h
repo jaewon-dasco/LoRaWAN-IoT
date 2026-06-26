@@ -1,0 +1,210 @@
+/*
+ * ADC_NAU7802.h
+ *
+ *  Created on: Jan 27, 2025
+ *      Author: JONE
+ */
+#ifndef INC_ADC_NAU7802_H_
+#define INC_ADC_NAU7802_H_
+
+#define ADC_NAU7802_VERSION		0.1
+
+#ifdef __HAL_I2C_ENABLE
+
+#include "Mi_Main.h"
+#define NAU7802_VREF(REFP,REFN)			((double)(REFP)-(double)(REFN))
+#define NAU7802_INPUT_RANGE(VREF,PGA)	(0.5/((double)(VREF)/(double)(PGA)))
+#define NAU7802_EV_GAIN(VMAX,VREF)		((double)(VREF)/((double)(VMAX)*0.5)) //Expected gain | VMAX(Max input voltage (1V)) | VREF(1V)
+#define NAU7802_ADC_BITMASK				0xFFFFFF
+#define NAU7802_ADC_MAXVALUE			(16777215)
+#define NAU7802_ADC_TO_V(ADC)			((((double)(NAU7802_VLDO)/(double)NAU7802_ADC_MAXVALUE) * (double)(ADC)) / (MATH_MAX((double)(NAU7802_Gain), 1)))
+#define NAU7802_ADDRESS 				(uint16_t)(0x54)						// slave address
+
+#define NAU7802_REG_PUCTRL				0x00
+#define NAU7802_REG_CTRL1				0x01
+#define NAU7802_REG_CTRL2				0x02
+#define NAU7802_REG_I2C_CTRL			0x11
+#define NAU7802_REG_ADC_B2				0x12
+#define NAU7802_REG_ADC_B1				0x13
+#define NAU7802_REG_ADC_B0				0x14
+#define NAU7802_REG_ADC_CTRL			0x15
+#define NAU7802_REG_PGA_CTRL			0x1B
+#define NAU7802_REG_POWER				0x1C
+#define NAU7802_REG_CHIP_ID				0x1F
+
+#define  OCAL1_REG_B2 					0x03 	/* CH1 OFFSE Calibration[23:16] 	0x00 */
+#define  OCAL1_REG_B1 					0x04	/* CH1 OFFSET Calibration[15:8] 	0x00 */
+#define  OCAL1_REG_B0 					0x05 	/* CH1 OFFSET Calibration[7:0] 		0x00 */
+#define  GCAL1_REG_B3 					0x06	/* CH1 GAIN Calibration[31:24] 		0x00 */
+#define  GCAL1_REG_B2 					0x07	/* CH1 GAIN Calibration[23:16] 		0x80 */
+#define  GCAL1_REG_B1 					0x08	/* CH1 GAIN Calibration[15:8] 		0x00 */
+#define  GCAL1_REG_B0 					0x09	/* CH1 GAIN Calibration[7:0] 		0x00 */
+#define  OCAL2_REG_B2 					0x0A 	/* CH2 OFFSET Calibration[23:16] 	0x00 */
+#define  OCAL2_REG_B1 					0x0B 	/* CH2 OFFSET Calibration[15:8] 	0x00 */
+#define  OCAL2_REG_B0 					0x0C	/* CH2 OFFSET Calibration[7:0] 		0x00 */
+#define  GCAL2_REG_B3 					0x0D	/* CH2 GAIN Calibration[31:24] 		0x00 */
+#define  GCAL2_REG_B2 					0x0E	/* CH2 GAIN Calibration[23:16] 		0x80 */
+#define  GCAL2_REG_B1 					0x0F	/* CH2 GAIN Calibration[15:8] 		0x00 */
+#define  GCAL2_REG_B0 					0x10	/* CH2 GAIN Calibration[7:0] 		0x00 */
+
+
+#define NAU7802_MIN_CONVERSIONS		 	6
+
+//PUCTRL
+#define NAU7802_PUCTRL_RR				0b00000001
+#define NAU7802_PUCTRL_PUD				0b00000010
+#define NAU7802_PUCTRL_PUA				0b00000100
+#define NAU7802_PUCTRL_PUR				0b00001000
+#define NAU7802_PUCTRL_CS				0b00010000
+#define NAU7802_PUCTRL_CR				0b00100000
+#define NAU7802_PUCTRL_OSCS				0b01000000
+#define NAU7802_PUCTRL_AVDDS			0b10000000
+
+//CTRL1
+#define NAU7802_CTRL1_GAIN_X1			0b00000000
+#define NAU7802_CTRL1_GAIN_X2			0b00000001
+#define NAU7802_CTRL1_GAIN_X4			0b00000010
+#define NAU7802_CTRL1_GAIN_X8			0b00000011
+#define NAU7802_CTRL1_GAIN_X16			0b00000100
+#define NAU7802_CTRL1_GAIN_X32			0b00000101
+#define NAU7802_CTRL1_GAIN_X64			0b00000110
+#define NAU7802_CTRL1_GAIN_X128			0b00000111
+#define NAU7802_CTRL1_GAIN_MASK			0b00000111
+
+#define NAU7802_CTRL1_VLDO_4_5V			0b00000000
+#define NAU7802_CTRL1_VLDO_4_2V			0b00001000
+#define NAU7802_CTRL1_VLDO_3_9V			0b00010000
+#define NAU7802_CTRL1_VLDO_3_6V			0b00011000
+#define NAU7802_CTRL1_VLDO_3_3V			0b00100000
+#define NAU7802_CTRL1_VLDO_3_0V			0b00101000
+#define NAU7802_CTRL1_VLDO_2_7V			0b00110000
+#define NAU7802_CTRL1_VLDO_2_4V			0b00111000
+#define NAU7802_CTRL1_VLDO_MASK			0b00111000
+
+#define NAU7802_CTRL1_DRDY_SEL			0b01000000
+#define NAU7802_CTRL1_CRP				0b10000000
+
+//CTRL2
+#define NAU7802_CTRL2_CHS_CH1			0b00000000
+#define NAU7802_CTRL2_CHS_CH2			0b10000000
+#define NAU7802_CTRL2_CHS_MASK			0b10000000
+
+#define NAU7802_CTRL2_CRS_10SPS			0b00000000
+#define NAU7802_CTRL2_CRS_20SPS			0b00010000
+#define NAU7802_CTRL2_CRS_40SPS			0b00100000
+#define NAU7802_CTRL2_CRS_80SPS			0b00110000
+#define NAU7802_CTRL2_CRS_320SPS		0b01110000
+#define NAU7802_CTRL2_CRS_MASK			0b01110000
+
+#define NAU7802_CTRL2_CAL_ERR			0b00001000
+#define NAU7802_CTRL2_CALS				0b00000100
+
+#define NAU7802_CTRL2_CALMOD_DEFAULT	0b00000000
+#define NAU7802_CTRL2_CALMOD_SYS_OFFSET	0b00000010
+#define NAU7802_CTRL2_CALMOD_SYS_GAIN	0b00000011
+
+//PGA
+#define NAU7802_PGA_RD_OTP_SEL			0b10000000
+#define NAU7802_PGA_LDOMODE				0b01000000
+#define NAU7802_PGA_BUFFER_OUTPUT		0b00100000
+#define NAU7802_PGA_BYPASS_ENABLE		0b00010000
+#define NAU7802_PGA_PGAINV				0b00001000
+#define NAU7802_PGA_PGACHPDIS_DISABLE	0b00000001
+
+//POWER
+#define NAU7802_PWR_CAP_EN				0b10000000
+
+#define NAU7802_PWR_MASTER_BIAS_100P	0b00000000
+#define NAU7802_PWR_MASTER_BIAS_90P		0b00010000
+#define NAU7802_PWR_MASTER_BIAS_80P		0b00100000
+#define NAU7802_PWR_MASTER_BIAS_73P		0b00110000
+#define NAU7802_PWR_MASTER_BIAS_67P		0b01000000
+#define NAU7802_PWR_MASTER_BIAS_62P		0b01010000
+#define NAU7802_PWR_MASTER_BIAS_58P		0b01100000
+#define NAU7802_PWR_MASTER_BIAS_54P		0b01110000
+
+#define NAU7802_PWR_ADC_CURR_100P		0b00000000
+#define NAU7802_PWR_ADC_CURR_95P		0b00000100
+#define NAU7802_PWR_ADC_CURR_86P		0b00001000
+#define NAU7802_PWR_ADC_CURR_70P		0b00001100
+
+#define NAU7802_PWR_PGA_CURR_100P		0b00000000
+#define NAU7802_PWR_PGA_CURR_95P		0b00000001
+#define NAU7802_PWR_PGA_CURR_86P		0b00000010
+#define NAU7802_PWR_PGA_CURR_70P		0b00000011
+
+typedef enum{
+	NAU7802_SAMPLING_10SPS = 0b00000000,
+	NAU7802_SAMPLING_20SPS = 0b00010000,
+	NAU7802_SAMPLING_40SPS = 0b00100000,
+	NAU7802_SAMPLING_80SPS = 0b00110000,
+	NAU7802_SAMPLING_320SPS = 0b01110000
+}NAU7802_SamplingRate_t;
+
+typedef enum{
+	NAU7802_VLDO_4_5V = 0b00000000,
+	NAU7802_VLDO_4_2V = 0b00001000,
+	NAU7802_VLDO_3_9V = 0b00010000,
+	NAU7802_VLDO_3_6V = 0b00011000,
+	NAU7802_VLDO_3_3V = 0b00100000,
+	NAU7802_VLDO_3_0V = 0b00101000,
+	NAU7802_VLDO_2_7V = 0b00110000,
+	NAU7802_VLDO_2_4V = 0b00111000,
+}NAU7802_VLDO_t;
+
+typedef enum{
+	NAU7802_GAIN_X1 = 0b00000000,
+	NAU7802_GAIN_X2 = 0b00000001,
+	NAU7802_GAIN_X4 = 0b00000010,
+	NAU7802_GAIN_X8 = 0b00000011,
+	NAU7802_GAIN_X16 = 0b00000100,
+	NAU7802_GAIN_X32 = 0b00000101,
+	NAU7802_GAIN_X64 = 0b00000110,
+	NAU7802_GAIN_X128 = 0b00000111,
+	NAU7802_GAIN_BYPASS = 0b11111111,
+}NAU7802_Gain_t;
+
+typedef struct{
+	void *pI2C; //I2C_HandleTypeDef
+	double VREF;
+	double AmpGain;
+	uint8_t CurrentChannel;
+
+	struct{
+		uint8_t Channel;
+		NAU7802_Gain_t Gain;
+		NAU7802_VLDO_t VLDO;
+		NAU7802_SamplingRate_t SamplingRate;
+	}Registers;
+
+	struct{
+		double SumOfAnalog;
+		uint8_t ReadCount;
+	}OverSampling;
+
+	uint8_t ErrorCount;
+	uint8_t ProcessStep;
+	int32_t ReadData;
+	uint32_t Timer;
+	uint32_t OpenTimestamp;
+
+	uint8_t IsOpen;
+	uint8_t IsOpening;
+	uint8_t IsADConversion;
+}NAU7802_t;
+
+extern oResult_t NAU7802_Init(NAU7802_t *pDev, I2C_HandleTypeDef *pI2C, NAU7802_VLDO_t VLDO);
+extern oResult_t NAU7802_DeInit(NAU7802_t *pDev);
+extern oResult_t NAU7802_IsDataReady(NAU7802_t *pDev);
+extern oResult_t NAU7802_SetGain(NAU7802_t *pDev, NAU7802_Gain_t Gain);
+extern oResult_t NAU7802_ADCRead(NAU7802_t *pDev, uint8_t Channel, NAU7802_SamplingRate_t SamplingRate, int32_t *pADC);
+extern oResult_t NAU7802_AnalogRead(NAU7802_t *pDev, uint8_t Channel, NAU7802_SamplingRate_t SamplingRate, double *pAnalog);
+extern oResult_t NAU7802_AnalogOverSampling(NAU7802_t *pDev, uint8_t Channel, NAU7802_SamplingRate_t SamplingRate, uint8_t SamplingCount, double *pAnalog);
+#endif
+#endif /* INC_ADC_NAU7802_H_ */
+
+/* History
+
+2026-06-26 | v0.1
+	- baseline (ADC_NAU7802.h)
+*/
