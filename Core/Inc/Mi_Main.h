@@ -1,6 +1,8 @@
 #ifndef INC_MI_MAIN_H_
 #define INC_MI_MAIN_H_
 
+#define MI_MAIN_VERSION		0.1
+
 #include "ONE_Math.h"
 #include "ONE_Signal.h"
 #include "ONE_Time.h"
@@ -68,3 +70,9 @@ extern DMA_HandleTypeDef hdma_usart3_tx;
 extern void MiMain(void);
 
 #endif /* INC_MI_MAIN_H_ */
+
+/* History
+
+2026-06-26 | v0.1
+	- baseline (Mi_Main.h)
+*/

@@ -23,30 +23,6 @@
 #define LORA_SIC100_SINGLE_FIRST_COUNT	13
 #define LORA_SIC100_SINGLE_NEXT_COUNT	14
 
-/* TiltArray 의 마지막 non-zero entry 의 index+1 — 실제 측정된 센서 개수 추론 */
-static uint8_t SIC100_GetTiltCount(IoTDataSIC100_2C_t *pData)
-{
-	uint8_t i;
-	uint8_t count = 0;
-
-	if(pData->TiltArray.Type == IoTSensorType_ArrayDualTilt){
-		for(i=0; i<MIIOT_ARRAYSENSOR_MAX_COUNT; i++){
-			if(pData->TiltArray.Dual[i].AxisX != 0 || pData->TiltArray.Dual[i].AxisY != 0){
-				count = i + 1;
-			}
-		}
-	}
-	else if(pData->TiltArray.Type == IoTSensorType_ArraySingleTilt){
-		for(i=0; i<MIIOT_ARRAYSENSOR_MAX_COUNT; i++){
-			if(pData->TiltArray.Single[i].Axis != 0){
-				count = i + 1;
-			}
-		}
-	}
-
-	return count;
-}
-
 /* 메일박스 데이터를 LoRa 페이로드 크기(51B)에 맞게 시퀀스별로 분할 인코딩
  * SeqeunceCount: 현재 시퀀스 번호 (0부터 시작)
  * 반환: 인코딩된 바이트 수 (0이면 더 이상 전송할 데이터 없음)
@@ -110,7 +86,7 @@ uint32_t MiLoRa_Encode(IoT_MailboxItem_t *pMail, uint8_t SeqeunceCount, uint8_t 
 				sensorSize = isDual ? MIIOT_SENSORDATA_SIZE_TILT_DUAL : MIIOT_SENSORDATA_SIZE_TILT_SINGLE;
 				firstCnt = isDual ? LORA_SIC100_DUAL_FIRST_COUNT : LORA_SIC100_SINGLE_FIRST_COUNT;
 				nextCnt = isDual ? LORA_SIC100_DUAL_NEXT_COUNT : LORA_SIC100_SINGLE_NEXT_COUNT;
-				totalSensors = hasTilt ? SIC100_GetTiltCount(pSrc) : 0;
+				totalSensors = hasTilt ? pSrc->CountOfArraySensor : 0;
 			}
 
 			// 외부 SeqeunceCount → 내부 tiltSeq / 패킷 emittedSeq 매핑
@@ -186,3 +162,9 @@ uint32_t MiLoRa_Encode(IoT_MailboxItem_t *pMail, uint8_t SeqeunceCount, uint8_t 
 
 	return SizeofData;
 }
+
+/* History
+
+2026-06-26 | v0.1
+	- baseline (Mi_LoRa_SIC100.c)
+*/

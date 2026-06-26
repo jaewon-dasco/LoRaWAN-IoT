@@ -8,6 +8,8 @@
 #ifndef INC_ONE_SIGNAL_H_
 #define INC_ONE_SIGNAL_H_
 
+#define ONE_SIGNAL_VERSION		0.1
+
 #include "ONE_Common.h"
 
 #define IO_LOW					0
@@ -137,3 +139,9 @@ extern uint8_t oDelay_Falling(oDelay_t *pDelay);
 extern uint8_t oDelay_AutoOff(oDelay_t *pDelay);
 
 #endif /* INC_ONE_SIGNAL_H_ */
+
+/* History
+
+2026-06-26 | v0.1
+	- baseline (ONE_Signal.h)
+*/

@@ -337,3 +337,9 @@ oRange_t oMoveAverage_GetRange(oMoveAverage_t *pAvg)
 
 	return result;
 }
+
+/* History
+
+2026-06-26 | v0.1
+	- baseline (ONE_Filter.c)
+*/

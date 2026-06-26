@@ -169,8 +169,7 @@ oResult_t NAU7802_SetGain(NAU7802_t *pDev, NAU7802_Gain_t Gain)
 		case NAU7802_GAIN_X64:	AmpGain = 64;	break;
 		case NAU7802_GAIN_X128:	AmpGain = 128;	break;
 		case NAU7802_GAIN_BYPASS: AmpGain = 1;	break;
-		default:
-			return RESULT_ERROR;
+		default: return RESULT_ERROR;
 	}
 
 	if(pDev->Registers.Gain == Gain){
@@ -598,3 +597,9 @@ oResult_t NAU7802_AnalogOverSampling(NAU7802_t *pDev, uint8_t Channel, NAU7802_S
 	return result;
 }
 #endif
+
+/* History
+
+2026-06-26 | v0.1
+	- baseline (ADC_NAU7802.c)
+*/

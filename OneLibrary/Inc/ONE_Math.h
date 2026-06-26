@@ -8,6 +8,8 @@
 #ifndef INC_ONE_MATH_H_
 #define INC_ONE_MATH_H_
 
+#define ONE_MATH_VERSION		0.1
+
 #include "ONE_Common.h"
 
 #define MATH_PI 						3.14159265358979323846
@@ -79,3 +81,9 @@ extern double oMath_Polynomial(double InData, double Polynomial[], uint8_t Numbe
 extern double oMath_Median3(double a, double b, double c);
 
 #endif /* INC_ONE_MATH_H_ */
+
+/* History
+
+2026-06-26 | v0.1
+	- baseline (ONE_Math.h)
+*/

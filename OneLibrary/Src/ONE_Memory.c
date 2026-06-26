@@ -94,3 +94,9 @@ uint32_t oMEM_CRC32(uint8_t *block, uint32_t blockLength, uint32_t crc)
     }
     return crc;
 }
+
+/* History
+
+2026-06-26 | v0.1
+	- baseline (ONE_Memory.c)
+*/

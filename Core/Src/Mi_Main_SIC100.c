@@ -181,217 +181,171 @@ void MiMain_GPIOInit(void)
 	HAL_ADC_Init(&hadc1);
 }
 
-IoT_DataPacket_t MiMain_GetArrayStableData(IoT_DataPacket_t *pReference, IoT_DataPacket_t *pPast, IoT_DataPacket_t *pNew)
+/* SIC100 통합 패킷(DataArray_Type2)의 채널별 오차 검증.
+ * 각 활성 채널을 자신의 ErrorTolerance에 대해 검사. 어느 한 채널이라도 초과하면 1, 모두 충족이면 0.
+ * tolerance==0 또는 RetryCount==0 채널은 검사 대상 제외(재측정 불요). Analog Type 변경 시 즉시 error. */
+uint8_t MiMain_IsError(IoT_DataPacket_t *pReference, IoT_DataPacket_t *pCompare)
 {
-	double errorD1;
-	double errorD2;
-	IoT_DataPacket_t StableData;
-	uint32_t i = 0;
-	uint32_t cnt = 0;
-
-	if(pReference->DLC == 0 || pReference->TypeOfData != pNew->TypeOfData){
-		return *pNew;
-	}
-
-	StableData.TypeOfData = pReference->TypeOfData;
-	StableData.DLC = pReference->DLC;
-
-	do
-	{
-		if(pReference->TypeOfData == IoTDataType_ArrayDualTilt){
-			IoTDataArrayDualTilt_t *pStable = (IoTDataArrayDualTilt_t *)&StableData.Frame;
-			IoTDataArrayDualTilt_t *pRef = (IoTDataArrayDualTilt_t *)&pReference->Frame;
-			IoTDataArrayDualTilt_t *pD1 = (IoTDataArrayDualTilt_t *)&pPast->Frame;
-			IoTDataArrayDualTilt_t *pD2 = (IoTDataArrayDualTilt_t *)&pNew->Frame;
-
-			errorD1 = MIIOT_DATA_DECODE_ANGLE(pRef->TiltArray[i].AxisX) - MIIOT_DATA_DECODE_ANGLE(pD1->TiltArray[i].AxisX);
-			errorD2 = MIIOT_DATA_DECODE_ANGLE(pRef->TiltArray[i].AxisX) - MIIOT_DATA_DECODE_ANGLE(pD2->TiltArray[i].AxisX);
-
-			pStable->TiltArray[i].AxisX = (MATH_ABS(errorD1) <= MATH_ABS(errorD2)) ? pD1->TiltArray[i].AxisX : pD2->TiltArray[i].AxisX;
-
-			errorD1 = MIIOT_DATA_DECODE_ANGLE(pRef->TiltArray[i].AxisY) - MIIOT_DATA_DECODE_ANGLE(pD1->TiltArray[i].AxisY);
-			errorD2 = MIIOT_DATA_DECODE_ANGLE(pRef->TiltArray[i].AxisY) - MIIOT_DATA_DECODE_ANGLE(pD2->TiltArray[i].AxisY);
-
-			pStable->TiltArray[i].AxisY = (MATH_ABS(errorD1) <= MATH_ABS(errorD2)) ? pD1->TiltArray[i].AxisY : pD2->TiltArray[i].AxisY;
-
-			if(cnt == 0){
-				cnt = MIIOT_PAYLOAD_TO_DUALARRAY_COUNT(pReference->DLC);
-			}
-		}
-		else if(pReference->TypeOfData == IoTDataType_ArraySingleTilt){
-			IoTDataArraySingleTilt_t *pStable = (IoTDataArraySingleTilt_t *)&StableData.Frame;
-			IoTDataArraySingleTilt_t *pRef = (IoTDataArraySingleTilt_t *)&pReference->Frame;
-			IoTDataArraySingleTilt_t *pD1 = (IoTDataArraySingleTilt_t *)&pPast->Frame;
-			IoTDataArraySingleTilt_t *pD2 = (IoTDataArraySingleTilt_t *)&pNew->Frame;
-
-			errorD1 = MIIOT_DATA_DECODE_ANGLE(pRef->TiltArray[i].Axis) - MIIOT_DATA_DECODE_ANGLE(pD1->TiltArray[i].Axis);
-			errorD2 = MIIOT_DATA_DECODE_ANGLE(pRef->TiltArray[i].Axis) - MIIOT_DATA_DECODE_ANGLE(pD2->TiltArray[i].Axis);
-
-			pStable->TiltArray[i].Axis = (MATH_ABS(errorD1) <= MATH_ABS(errorD2)) ? pD1->TiltArray[i].Axis : pD2->TiltArray[i].Axis;
-
-			if(cnt == 0){
-				cnt = MIIOT_PAYLOAD_TO_SINGLEARRAY_COUNT(pReference->DLC);
-			}
-		}
-		else{
-			break;
-		}
-	}
-	while(++i < cnt);
-
-	return StableData;
-}
-
-oRange_t MiMain_GetArrayDataError(IoT_DataPacket_t *pReference, IoT_DataPacket_t *pCompare)
-{
-	oRange_t ragne = {3.402823466E+38, -3.402823466E+38};
 	double error;
-	uint32_t i = 0;
-	uint32_t cnt = 0;
+	uint32_t i;
+	uint8_t ch;
+	IoTChannelConfig_t *pConfig;
 
-	if(!pReference || !pCompare || pReference->TypeOfData != pCompare->TypeOfData || pReference->DLC == 0){
-		ragne.Min = 0;
-		ragne.Max = 0;
-		return ragne;
-	}
-
-	do
-	{
-		if(pReference->TypeOfData == IoTDataType_ArrayDualTilt){
-			IoTDataArrayDualTilt_t *ref = (IoTDataArrayDualTilt_t *)&pReference->Frame;
-			IoTDataArrayDualTilt_t *cmp = (IoTDataArrayDualTilt_t *)&pCompare->Frame;
-
-			error = MIIOT_DATA_DECODE_ANGLE(ref->TiltArray[i].AxisX) - MIIOT_DATA_DECODE_ANGLE(cmp->TiltArray[i].AxisX);
-
-			ragne.Min = MATH_MIN(error, ragne.Min);
-			ragne.Max = MATH_MAX(error, ragne.Max);
-
-			error = MIIOT_DATA_DECODE_ANGLE(ref->TiltArray[i].AxisY) - MIIOT_DATA_DECODE_ANGLE(cmp->TiltArray[i].AxisY);
-
-			ragne.Min = MATH_MIN(error, ragne.Min);
-			ragne.Max = MATH_MAX(error, ragne.Max);
-
-			if(cnt == 0){
-				cnt = MIIOT_PAYLOAD_TO_DUALARRAY_COUNT(pReference->DLC);
-			}
-		}
-		else if(pReference->TypeOfData == IoTDataType_ArraySingleTilt){
-			IoTDataArraySingleTilt_t *ref = (IoTDataArraySingleTilt_t *)&pReference->Frame;
-			IoTDataArraySingleTilt_t *cmp = (IoTDataArraySingleTilt_t *)&pCompare->Frame;
-
-			error = MIIOT_DATA_DECODE_ANGLE(ref->TiltArray[i].Axis) - MIIOT_DATA_DECODE_ANGLE(cmp->TiltArray[i].Axis);
-
-			ragne.Min = MATH_MIN(error, ragne.Min);
-			ragne.Max = MATH_MAX(error, ragne.Max);
-
-			if(cnt == 0){
-				cnt = MIIOT_PAYLOAD_TO_SINGLEARRAY_COUNT(pReference->DLC);
-			}
-		}
-		else{
-			break;
-		}
-	}
-	while(++i < cnt);
-
-	return ragne;
-}
-
-/* TypeOfData 기반 오차 디스패처 — Array는 Min/Max 범위, Analog는 단일값(Min=Max) */
-oRange_t MiMain_GetMeasureError(IoT_DataPacket_t *pReference, IoT_DataPacket_t *pCompare);
-
-/* TypeOfData 기반 Stable 데이터 디스패처 */
-IoT_DataPacket_t MiMain_GetMeasureStableData(IoT_DataPacket_t *pReference, IoT_DataPacket_t *pPast, IoT_DataPacket_t *pNew);
-
-/* Analog 단일 채널(Channel[1]) 측정값 오차 */
-double MiMain_GetAnalogDataError(IoT_DataPacket_t *pReference, IoT_DataPacket_t *pCompare)
-{
 	if(!pReference || !pCompare ||
-	   pReference->TypeOfData != IoTDataType_Analog ||
-	   pCompare->TypeOfData != IoTDataType_Analog ||
-	   pReference->DLC == 0){
+	   pReference->TypeOfData != pCompare->TypeOfData ||
+	   pReference->DLC == 0 ||
+	   pReference->TypeOfData != IoTDataType_DataArray_Type2){
 		return 0;
 	}
 
-	IoTDataAnalog_t *ref = (IoTDataAnalog_t *)&pReference->Frame;
-	IoTDataAnalog_t *cmp = (IoTDataAnalog_t *)&pCompare->Frame;
+	IoTDataSIC100_2C_t *pRef = (IoTDataSIC100_2C_t *)&pReference->Frame;
+	IoTDataSIC100_2C_t *pCmp = (IoTDataSIC100_2C_t *)&pCompare->Frame;
 
-	/* Type 변경은 무조건 큰 오차로 판단 — 최대값 반환하여 재측정 유도 */
-	if(ref->Channel[1].Type != cmp->Channel[1].Type){
-		return 3.402823466E+38;
+	for(ch = 0; ch < MEASUREMENT_CHANNEL_MAXCOUNT; ch++){
+		pConfig = &MiIoT_Parameter.ChannelConfig[ch];
+
+		if(pConfig->ErrorTolerance == 0 || pConfig->RetryCount == 0){
+			continue;
+		}
+
+		switch(pConfig->TypeOfSensor){
+			case IoTSensorType_ArrayDualTilt:
+				if(pRef->TiltArray.Type != IoTSensorType_ArrayDualTilt){
+					break;
+				}
+				for(i = 0; i < pRef->CountOfArraySensor; i++){
+					error = MIIOT_DATA_DECODE_ANGLE(pRef->TiltArray.Dual[i].AxisX) - MIIOT_DATA_DECODE_ANGLE(pCmp->TiltArray.Dual[i].AxisX);
+					if(MATH_ABS(error) > pConfig->ErrorTolerance) return 1;
+					error = MIIOT_DATA_DECODE_ANGLE(pRef->TiltArray.Dual[i].AxisY) - MIIOT_DATA_DECODE_ANGLE(pCmp->TiltArray.Dual[i].AxisY);
+					if(MATH_ABS(error) > pConfig->ErrorTolerance) return 1;
+				}
+				break;
+
+			case IoTSensorType_ArraySingleTilt:
+				if(pRef->TiltArray.Type != IoTSensorType_ArraySingleTilt){
+					break;
+				}
+				for(i = 0; i < pRef->CountOfArraySensor; i++){
+					error = MIIOT_DATA_DECODE_ANGLE(pRef->TiltArray.Single[i].Axis) - MIIOT_DATA_DECODE_ANGLE(pCmp->TiltArray.Single[i].Axis);
+					if(MATH_ABS(error) > pConfig->ErrorTolerance) return 1;
+				}
+				break;
+
+			case IoTSensorType_mV:
+			case IoTSensorType_mA:
+				if(pRef->Analog.Type != pConfig->TypeOfSensor){
+					break;
+				}
+				if(pRef->Analog.Type != pCmp->Analog.Type){
+					return 1;	/* Type 변경 → 강제 재측정 */
+				}
+				if(pRef->Analog.Type == IoTSensorType_mV){
+					error = MIIOT_DATA_DECODE_mV(pRef->Analog.Data) - MIIOT_DATA_DECODE_mV(pCmp->Analog.Data);
+				}
+				else{
+					error = MIIOT_DATA_DECODE_mA(pRef->Analog.Data) - MIIOT_DATA_DECODE_mA(pCmp->Analog.Data);
+				}
+				if(MATH_ABS(error) > pConfig->ErrorTolerance) return 1;
+				break;
+
+			default:
+				break;
+		}
 	}
 
-	return (double)ref->Channel[1].Analog - (double)cmp->Channel[1].Analog;
+	return 0;
 }
 
-/* Analog Best (오차 작은 쪽) 데이터 선택 */
-IoT_DataPacket_t MiMain_GetAnalogStableData(IoT_DataPacket_t *pReference, IoT_DataPacket_t *pPast, IoT_DataPacket_t *pNew)
+/* SIC100 통합 패킷(DataArray_Type2)의 안정값 합성 — Analog(CH2) + Tilt(CH1) 양쪽 처리.
+ * 두 후보(past/new) 중 reference 와 더 가까운 쪽을 element별로 선택.
+ * 메타데이터(Time/Type/Temp/Count/Channel)는 reference 그대로 복사. */
+IoT_DataPacket_t MiMain_GetMeasureStableData(IoT_DataPacket_t *pReference, IoT_DataPacket_t *pPast, IoT_DataPacket_t *pNew)
 {
 	IoT_DataPacket_t StableData;
-	double errPast;
-	double errNew;
+	double errorD1;
+	double errorD2;
+	uint32_t i;
 
-	if(pReference->DLC == 0 || pReference->TypeOfData != pNew->TypeOfData){
+	if(pReference->DLC == 0 ||
+	   pReference->TypeOfData != pNew->TypeOfData ||
+	   pReference->TypeOfData != IoTDataType_DataArray_Type2){
 		return *pNew;
 	}
 
 	StableData.TypeOfData = pReference->TypeOfData;
 	StableData.DLC = pReference->DLC;
 
-	errPast = MATH_ABS(MiMain_GetAnalogDataError(pReference, pPast));
-	errNew  = MATH_ABS(MiMain_GetAnalogDataError(pReference, pNew));
+	IoTDataSIC100_2C_t *pStable = (IoTDataSIC100_2C_t *)&StableData.Frame;
+	IoTDataSIC100_2C_t *pRef    = (IoTDataSIC100_2C_t *)&pReference->Frame;
+	IoTDataSIC100_2C_t *pD1     = (IoTDataSIC100_2C_t *)&pPast->Frame;
+	IoTDataSIC100_2C_t *pD2     = (IoTDataSIC100_2C_t *)&pNew->Frame;
 
-	IoTDataAnalog_t *stable = (IoTDataAnalog_t *)&StableData.Frame;
-	IoTDataAnalog_t *src    = (errNew < errPast) ? (IoTDataAnalog_t *)&pNew->Frame
-	                                             : (IoTDataAnalog_t *)&pPast->Frame;
-	stable->Channel[1].Type   = src->Channel[1].Type;
-	stable->Channel[1].Analog = src->Channel[1].Analog;
-	stable->Time = src->Time;
+	pStable->Time                  = pRef->Time;
+	pStable->Analog.Type           = pRef->Analog.Type;
+	pStable->Analog.Channel        = pRef->Analog.Channel;
+	pStable->TiltArray.Type        = pRef->TiltArray.Type;
+	pStable->TiltArray.Temperature = pRef->TiltArray.Temperature;
+	pStable->CountOfArraySensor    = pRef->CountOfArraySensor;
+
+	/* Analog (CH2) — 단일값 best */
+	if(pRef->Analog.Type == IoTSensorType_mV || pRef->Analog.Type == IoTSensorType_mA){
+		double dRef, dD1, dD2;
+		if(pRef->Analog.Type == IoTSensorType_mV){
+			dRef = MIIOT_DATA_DECODE_mV(pRef->Analog.Data);
+			dD1  = MIIOT_DATA_DECODE_mV(pD1->Analog.Data);
+			dD2  = MIIOT_DATA_DECODE_mV(pD2->Analog.Data);
+		}
+		else{
+			dRef = MIIOT_DATA_DECODE_mA(pRef->Analog.Data);
+			dD1  = MIIOT_DATA_DECODE_mA(pD1->Analog.Data);
+			dD2  = MIIOT_DATA_DECODE_mA(pD2->Analog.Data);
+		}
+		errorD1 = dRef - dD1;
+		errorD2 = dRef - dD2;
+		pStable->Analog.Data = (MATH_ABS(errorD1) <= MATH_ABS(errorD2)) ? pD1->Analog.Data : pD2->Analog.Data;
+	}
+	else{
+		pStable->Analog.Data = pRef->Analog.Data;
+	}
+
+	/* Tilt (CH1) — 센서별 axis별 best */
+	if(pRef->TiltArray.Type == IoTSensorType_ArrayDualTilt){
+		for(i = 0; i < pRef->CountOfArraySensor; i++){
+			errorD1 = MIIOT_DATA_DECODE_ANGLE(pRef->TiltArray.Dual[i].AxisX) - MIIOT_DATA_DECODE_ANGLE(pD1->TiltArray.Dual[i].AxisX);
+			errorD2 = MIIOT_DATA_DECODE_ANGLE(pRef->TiltArray.Dual[i].AxisX) - MIIOT_DATA_DECODE_ANGLE(pD2->TiltArray.Dual[i].AxisX);
+			pStable->TiltArray.Dual[i].AxisX = (MATH_ABS(errorD1) <= MATH_ABS(errorD2)) ? pD1->TiltArray.Dual[i].AxisX : pD2->TiltArray.Dual[i].AxisX;
+
+			errorD1 = MIIOT_DATA_DECODE_ANGLE(pRef->TiltArray.Dual[i].AxisY) - MIIOT_DATA_DECODE_ANGLE(pD1->TiltArray.Dual[i].AxisY);
+			errorD2 = MIIOT_DATA_DECODE_ANGLE(pRef->TiltArray.Dual[i].AxisY) - MIIOT_DATA_DECODE_ANGLE(pD2->TiltArray.Dual[i].AxisY);
+			pStable->TiltArray.Dual[i].AxisY = (MATH_ABS(errorD1) <= MATH_ABS(errorD2)) ? pD1->TiltArray.Dual[i].AxisY : pD2->TiltArray.Dual[i].AxisY;
+		}
+	}
+	else if(pRef->TiltArray.Type == IoTSensorType_ArraySingleTilt){
+		for(i = 0; i < pRef->CountOfArraySensor; i++){
+			errorD1 = MIIOT_DATA_DECODE_ANGLE(pRef->TiltArray.Single[i].Axis) - MIIOT_DATA_DECODE_ANGLE(pD1->TiltArray.Single[i].Axis);
+			errorD2 = MIIOT_DATA_DECODE_ANGLE(pRef->TiltArray.Single[i].Axis) - MIIOT_DATA_DECODE_ANGLE(pD2->TiltArray.Single[i].Axis);
+			pStable->TiltArray.Single[i].Axis = (MATH_ABS(errorD1) <= MATH_ABS(errorD2)) ? pD1->TiltArray.Single[i].Axis : pD2->TiltArray.Single[i].Axis;
+		}
+	}
 
 	return StableData;
-}
-
-/* TypeOfData 기반 디스패처 — case 4 본문 변경 없이 Array/Analog 양쪽 지원 */
-oRange_t MiMain_GetMeasureError(IoT_DataPacket_t *pReference, IoT_DataPacket_t *pCompare)
-{
-	if(pReference && pReference->TypeOfData == IoTDataType_Analog){
-		double err = MiMain_GetAnalogDataError(pReference, pCompare);
-		oRange_t r;
-		r.Min = err;
-		r.Max = err;
-		return r;
-	}
-	return MiMain_GetArrayDataError(pReference, pCompare);
-}
-
-IoT_DataPacket_t MiMain_GetMeasureStableData(IoT_DataPacket_t *pReference, IoT_DataPacket_t *pPast, IoT_DataPacket_t *pNew)
-{
-	if(pReference && pReference->TypeOfData == IoTDataType_Analog){
-		return MiMain_GetAnalogStableData(pReference, pPast, pNew);
-	}
-	return MiMain_GetArrayStableData(pReference, pPast, pNew);
 }
 
 oResult_t MiMain_UpdateMeasure(IoT_DataPacket_t **ppPacket)
 {
 	static uint8_t UpdateMeasureStep = 0;
-	static uint8_t ChannelNo = 0;
 	static IoT_DataPacket_t SmaplingData;
-	static IoT_DataPacket_t PastSampling[MEASUREMENT_CHANNEL_MAXCOUNT];
-	static IoT_DataPacket_t StableDataBuffer[MEASUREMENT_CHANNEL_MAXCOUNT];
-	static uint8_t TryCount[MEASUREMENT_CHANNEL_MAXCOUNT] = {0,};
-	static uint8_t ChannelDone[MEASUREMENT_CHANNEL_MAXCOUNT] = {0,};
-	static uint8_t ConsistentCount[MEASUREMENT_CHANNEL_MAXCOUNT] = {0,};
-	static IoT_DataPacket_t LastSamplingData[MEASUREMENT_CHANNEL_MAXCOUNT];
-	static uint32_t TryTimer[MEASUREMENT_CHANNEL_MAXCOUNT] = {0,};
-	static uint8_t TotalActiveChannels = 0;	/* 진행률 분모 — 활성 채널 총 개수 */
+	static IoT_DataPacket_t PastSampling;
+	static IoT_DataPacket_t StableDataBuffer;
+	static IoT_DataPacket_t LastSamplingData;
+	static uint8_t TryCount = 0;
+	static uint8_t ConsistentCount = 0;
+	static uint32_t TryTimer = 0;
+	static uint8_t MaxRetryCount = 0;	/* 활성 채널 중 가장 큰 RetryCount */
+	static uint8_t MaxRetryInterval = 0;
+	static uint8_t HasActiveChannel = 0;
 	uint32_t i;
 	oResult_t result = RESULT_RUN;
-	IoTChannelConfig_t *pConfig;
-
-	if(ChannelNo < MEASUREMENT_CHANNEL_MAXCOUNT){
-		pConfig = &MiIoT_Parameter.ChannelConfig[ChannelNo];
-	}
 
 	switch(UpdateMeasureStep)
 	{
@@ -399,162 +353,128 @@ oResult_t MiMain_UpdateMeasure(IoT_DataPacket_t **ppPacket)
 			UpdateMeasureStep = 0; // @suppress("No break at end of case")
 		case 0:
 			oSerial_Log("UpdateMeasure", "start\r\n");
-			memset(&TryCount, 0, sizeof(TryCount));
-			memset(&TryTimer, 0, sizeof(TryTimer));
-			memset(ChannelDone, 0, sizeof(ChannelDone));
-			memset(ConsistentCount, 0, sizeof(ConsistentCount));
+			TryCount = 0;
+			TryTimer = 0;
+			ConsistentCount = 0;
 			memset(&SmaplingData, 0, sizeof(SmaplingData));
-			ChannelNo = 0;
 			MiSerial_SensorSamplingProgress = 0;
 
-			TotalActiveChannels = 0;
+			/* 활성 채널 스캔 — 가장 큰 RetryCount/Interval 채택해 모든 채널의 재측정 요구 충족 */
+			HasActiveChannel = 0;
+			MaxRetryCount = 0;
+			MaxRetryInterval = 0;
 			for(i=0; i<MEASUREMENT_CHANNEL_MAXCOUNT; i++){
-				if(MiIoT_Parameter.ChannelConfig[i].TypeOfSensor != IoTSensorType_NULL){
-					TotalActiveChannels++;
+				IoTChannelConfig_t *pCfg = &MiIoT_Parameter.ChannelConfig[i];
+				IoTSensorType_t t = pCfg->TypeOfSensor;
+				uint8_t active = 0;
+
+				if((t == IoTSensorType_ArrayDualTilt || t == IoTSensorType_ArraySingleTilt) && pCfg->Properties.Array.CountOfSensor > 0){
+					active = 1;
+				}
+				else if(t == IoTSensorType_mV || t == IoTSensorType_mA){
+					active = 1;
+				}
+
+				if(active){
+					HasActiveChannel = 1;
+					if(pCfg->RetryCount > MaxRetryCount) MaxRetryCount = pCfg->RetryCount;
+					if(pCfg->RetryInterval > MaxRetryInterval) MaxRetryInterval = pCfg->RetryInterval;
 				}
 			}
 			UpdateMeasureStep++; // @suppress("No break at end of case")
-		case 1: {
-			uint8_t done = 0;
-			for(i=0; i<MEASUREMENT_CHANNEL_MAXCOUNT; i++){
-				if(MiIoT_Parameter.ChannelConfig[i].TypeOfSensor != IoTSensorType_NULL && ChannelDone[i]){
-					done++;
-				}
-			}
-			MiSerial_SensorSamplingProgress = (TotalActiveChannels > 0)
-				? MATH_LIMIT((uint8_t)((float)done/(float)TotalActiveChannels*99), 0, 99)
-				: 99;
-
-			if(MiSerial_UpdateSensorCmd && MiSerial_StopSensorCmd){
-				ChannelNo = 0;
+		case 1:
+			if(!HasActiveChannel){
 				MiSerial_SensorSamplingProgress = 100;
 				result = RESULT_DONE;
 			}
-			else if(ChannelNo >= MEASUREMENT_CHANNEL_MAXCOUNT){
-				ChannelNo = 0;
-				result = RESULT_DONE;
-
-				for(i=0; i<MEASUREMENT_CHANNEL_MAXCOUNT; i++){
-					if(!ChannelDone[i]){
-						result = RESULT_WAIT;
-					}
-				}
-
-				if(result == RESULT_DONE){
-					MiSerial_SensorSamplingProgress = 100;
-				}
-			}
-			else if(((pConfig->TypeOfSensor == IoTSensorType_ArrayDualTilt || pConfig->TypeOfSensor == IoTSensorType_ArraySingleTilt) && pConfig->Properties.Array.CountOfSensor > 0) ||
-			        pConfig->TypeOfSensor == IoTSensorType_mV ||
-			        pConfig->TypeOfSensor == IoTSensorType_mA){
+			else{
 				SmaplingData.DLC = 0;
 				SmaplingData.TypeOfData = IoTDataType_NULL;
 				UpdateMeasureStep++;
 			}
-			else{
-				ChannelDone[ChannelNo] = 1;
-				ChannelNo++;
-			}
 			break;
-		}
 		case 2:
-			if(pConfig->RetryCount && (ChannelDone[ChannelNo] || !oTMR_Elapsed(&TryTimer[ChannelNo], SECOND_TO_MS(pConfig->RetryInterval), TICKBASE_SYSTICK))){
-				UpdateMeasureStep = 1;
-				ChannelNo++;
+			if(TryCount > 0 && !oTMR_Elapsed(&TryTimer, SECOND_TO_MS(MaxRetryInterval), TICKBASE_SYSTICK)){
+				/* retry interval 대기 */
 			}
 			else{
 				UpdateMeasureStep++;
-				oSerial_Log("UpdateMeasure", "data sampling | %s\r\n", MiIoT_SensorTypeToString(pConfig->TypeOfSensor));
+				oSerial_Log("UpdateMeasure", "data sampling\r\n");
 			}
 			break;
 		case 3:
-			// Measurement_Sensor가 각 채널의 통합 측정값 단일 패킷 반환 — ChannelNo==0 시점만 호출, 이후 채널은 동일 SamplingData 사용
-			if(ChannelNo > 0){
-				UpdateMeasureStep++;
-				break;
-			}
-
 			switch(Measurement_Sensor(&SmaplingData))
 			{
 				case RESULT_OK:
 					UpdateMeasureStep++;
 					break;
 				case RESULT_ERROR:
-				UpdateMeasureStep = 5; // case 4(오차비교) 건너뜀
-					oSerial_Log("UpdateMeasure", "sampling error | %s\r\n", MiIoT_SensorTypeToString(pConfig->TypeOfSensor));
+					UpdateMeasureStep = 5;	/* case 4 오차비교 건너뜀 */
+					oSerial_Log("UpdateMeasure", "sampling error\r\n");
 					break;
 				default:
 					break;
 			}
 			break;
-		case 4:
-			oRange_t error;
+		case 4: {
+			uint8_t accept = 0;
 
-			error = MiMain_GetMeasureError(&PastSampling[ChannelNo], &SmaplingData);
-
-			if(PastSampling[ChannelNo].DLC == 0 || (MATH_ABS(error.Min) <= pConfig->ErrorTolerance && MATH_ABS(error.Max) <= pConfig->ErrorTolerance) || pConfig->ErrorTolerance == 0 || pConfig->RetryCount <= 0){
-				//?ㅼ감踰붿쐞 ???곗씠??
-				*ppPacket = &SmaplingData;
-				PastSampling[ChannelNo] = SmaplingData;
-
-				ChannelDone[ChannelNo] = 1;
+			if(PastSampling.DLC == 0 || !MiMain_IsError(&PastSampling, &SmaplingData)){
+				/* 오차범위 내 데이터 */
+				PastSampling = SmaplingData;
+				*ppPacket = &PastSampling;
+				accept = 1;
 			}
-			else {
-				//?ㅼ감踰붿쐞 珥덇낵 ?곗씠??
-				if(TryCount[ChannelNo] > 0){
-					StableDataBuffer[ChannelNo] = MiMain_GetMeasureStableData(&PastSampling[ChannelNo], &StableDataBuffer[ChannelNo], &SmaplingData);
+			else{
+				/* 오차범위 초과 데이터 */
+				if(TryCount > 0){
+					StableDataBuffer = MiMain_GetMeasureStableData(&PastSampling, &StableDataBuffer, &SmaplingData);
 
-					// 자기 일관성 검증 — 측정값끼리 일치하는지 확인
-					oRange_t newVsLast = MiMain_GetMeasureError(&LastSamplingData[ChannelNo], &SmaplingData);
+					/* 자기 일관성 검증 — 측정값끼리 일치하는지 확인 */
+					if(!MiMain_IsError(&LastSamplingData, &SmaplingData)){
+						ConsistentCount++;
+						oSerial_Log("UpdateMeasure", "Consistent=%d", ConsistentCount);
 
-					if(MATH_ABS(newVsLast.Min) <= pConfig->ErrorTolerance && MATH_ABS(newVsLast.Max) <= pConfig->ErrorTolerance){
-						ConsistentCount[ChannelNo]++;
-						oSerial_Log("UpdateMeasure", "CH%d Consistent=%d", ChannelNo+1, ConsistentCount[ChannelNo]);
-
-						if(ConsistentCount[ChannelNo] >= 2){
-							// 연속 2회 일치 — 센서 실제 변화로 확정
-							PastSampling[ChannelNo] = SmaplingData;
-							*ppPacket = &PastSampling[ChannelNo];
-							ChannelDone[ChannelNo] = 1;
-							oSerial_Log("UpdateMeasure", "CH%d Done (sensor changed)", ChannelNo+1);
-							LastSamplingData[ChannelNo] = SmaplingData;
-							UpdateMeasureStep++;
-							break;
+						if(ConsistentCount >= 2){
+							/* 연속 2회 일치 — 센서 실제 변화로 확정 */
+							PastSampling = SmaplingData;
+							*ppPacket = &PastSampling;
+							oSerial_Log("UpdateMeasure", "Done (sensor changed)");
+							LastSamplingData = SmaplingData;
+							accept = 1;
 						}
 					}
 					else{
-						ConsistentCount[ChannelNo] = 0;
+						ConsistentCount = 0;
 					}
 				}
 				else{
-					StableDataBuffer[ChannelNo] = SmaplingData;
+					StableDataBuffer = SmaplingData;
 				}
 
-				LastSamplingData[ChannelNo] = SmaplingData;
-				TryTimer[ChannelNo] = oTMR_GetTick(TICKBASE_SYSTICK);
-				TryCount[ChannelNo]++;
+				if(!accept){
+					LastSamplingData = SmaplingData;
+					TryTimer = oTMR_GetTick(TICKBASE_SYSTICK);
+					TryCount++;
 
-				error = MiMain_GetMeasureError(&PastSampling[ChannelNo], &StableDataBuffer[ChannelNo]);
-
-				if(TryCount[ChannelNo] >= pConfig->RetryCount || (MATH_ABS(error.Min) <= pConfig->ErrorTolerance && MATH_ABS(error.Max) <= pConfig->ErrorTolerance)){
-					PastSampling[ChannelNo] = StableDataBuffer[ChannelNo];
-					*ppPacket = &PastSampling[ChannelNo];
-
-					ChannelDone[ChannelNo] = 1;
+					if(TryCount >= MaxRetryCount || !MiMain_IsError(&PastSampling, &StableDataBuffer)){
+						PastSampling = StableDataBuffer;
+						*ppPacket = &PastSampling;
+						accept = 1;
+					}
 				}
 			}
 
-			UpdateMeasureStep++;
+			UpdateMeasureStep = accept ? 5 : 2;	/* accept면 5(완료 emit), 아니면 2(retry 대기) */
 			break;
+		}
 		case 5:
-				// 채널 완료 직후 상위 RESULT_OK 반환(호출자 Mi_IoT)이 즉시 Mailbox 큐잉
-				// 전체 완료(RESULT_DONE)는 case 1에서 모든 ChannelDone 확인 후 처리
-			if(ChannelDone[ChannelNo]){
-				result = RESULT_OK;
-			}
-
-			UpdateMeasureStep = 1;
-			ChannelNo++;
+			result = RESULT_OK;
+			UpdateMeasureStep = 6;
+			break;
+		case 6:
+			MiSerial_SensorSamplingProgress = 100;
+			result = RESULT_DONE;
 			break;
 	}
 
@@ -562,9 +482,6 @@ oResult_t MiMain_UpdateMeasure(IoT_DataPacket_t **ppPacket)
 		if(result == RESULT_DONE){
 			UpdateMeasureStep = 0;
 			oSerial_Log("UpdateMeasure", "finish\r\n");
-		}
-		else if(result == RESULT_WAIT){
-			UpdateMeasureStep = 1;
 		}
 	}
 
@@ -721,3 +638,9 @@ void MiMain (void)
 			break;
 	}
 }
+
+/* History
+
+2026-06-26 | v0.1
+	- baseline (Mi_Main_SIC100.c)
+*/

@@ -8,6 +8,8 @@
 #ifndef INC_MI_MEASUREMENT_H_
 #define INC_MI_MEASUREMENT_H_
 
+#define MI_MEASUREMENT_VERSION		0.1
+
 #include "Mi_LoRa.h"
 #include "Mi_IoT.h"
 #include "ONE_Common.h"
@@ -28,3 +30,9 @@ extern oResult_t Measurement_Sensor(IoT_DataPacket_t *pPacket);
 extern oResult_t Measurement_Supply(uint8_t Count);
 
 #endif /* INC_MI_MEASUREMENT_H_ */
+
+/* History
+
+2026-06-26 | v0.1
+	- baseline (Mi_Measurement.h)
+*/

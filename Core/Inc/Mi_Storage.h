@@ -8,6 +8,8 @@
 #ifndef INC_MI_STORAGE_H_
 #define INC_MI_STORAGE_H_
 
+#define MI_STORAGE_VERSION		0.1
+
 #include "Mi_Main.h"
 #include "NAND_MT29F2G01ABAGDWB_IT.h"
 
@@ -73,3 +75,8 @@ extern void MiStorage();
 
 #endif /* INC_MI_STORAGE_H_ */
 
+/* History
+
+2026-06-26 | v0.1
+	- baseline (Mi_Storage.h)
+*/

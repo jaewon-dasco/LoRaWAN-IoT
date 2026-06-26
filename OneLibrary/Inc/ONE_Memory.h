@@ -1,6 +1,8 @@
 #ifndef ONE_MEMORY_H
 #define ONE_MEMORY_H
 
+#define ONE_MEMORY_VERSION		0.1
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -121,3 +123,9 @@ extern uint32_t oMEM_CRC32(uint8_t *block, uint32_t blockLength, uint32_t crc);
 
 extern void oMEM_ChangeByteOrder(uint8_t* pData, uint32_t Size);
 #endif
+
+/* History
+
+2026-06-26 | v0.1
+	- baseline (ONE_Memory.h)
+*/

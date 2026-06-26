@@ -1,6 +1,8 @@
 #ifndef INC_ONE_ATCOMMEND_H_
 #define INC_ONE_ATCOMMEND_H_
 
+#define ONE_ATCOMMEND_VERSION		0.1
+
 #include "main.h"
 #include "ONE_Time.h"
 
@@ -12,7 +14,7 @@
 #define AT_STRING_CR						"\r"
 #define AT_STRING_LF						"\n"
 
-#define AT_DMA_INDEX(pUART)					(((uint32_t)((pUART)->RxXferSize) - ONE_DMA_GET_COUNTER((pUART)->hdmarx)))
+#define AT_DMA_INDEX(pUART)					(((uint32_t)((pUART)->RxXferSize) - (pUART)->hdmarx->Instance->CNDTR))
 #define AT_TRANSMIT_BUFFER_COUNT(pAT)		((pAT)->IndexOfTxLast<(pAT)->IndexOfTxFirst ? ((pAT)->LengthOfBufferTx-(pAT)->IndexOfTxFirst+(pAT)->IndexOfTxLast) : ((pAT)->IndexOfTxLast-(pAT)->IndexOfTxFirst))
 #define AT_RECEIVE_BUFFER_COUNT(pAT)		((pAT)->IndexOfRxLast<(pAT)->IndexOfRxFirst ? ((pAT)->LengthOfBufferRx-(pAT)->IndexOfRxFirst+(pAT)->IndexOfRxLast) : ((pAT)->IndexOfRxLast-(pAT)->IndexOfRxFirst))
 #define AT_RECEIVE_BUFFER_ITEM(pAT, Index)	(char *)((pAT)->pBufferRx + (((pAT)->IndexOfRxFirst + (uint32_t)Index) % (pAT)->LengthOfBufferRx))
@@ -91,3 +93,8 @@ extern void oAT_Proc(oATCommend_t *pAT);
 #endif
 #endif
 
+/* History
+
+2026-06-26 | v0.1
+	- baseline (ONE_ATCommend.h)
+*/

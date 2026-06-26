@@ -1308,3 +1308,9 @@ void RAK3172()
 {
 	oAT_Proc(&RAK3172Dev.AT);
 }
+
+/* History
+
+2026-06-26 | v0.1
+	- baseline (LoRa_RAK3172.c)
+*/

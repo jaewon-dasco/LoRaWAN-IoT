@@ -443,6 +443,7 @@ oResult_t Measurement_ArraySensorDual(IoTChannelConfig_t *pConfig)
 				if(++Trycount >= MEASURE_RETRY_MAXCOUNT || !Empty){
 					result = RESULT_OK;
 					pIoTData->TiltArray.Type = IoTSensorType_ArrayDualTilt;
+					pIoTData->CountOfArraySensor = MaxIndex;
 				}
 				else{
 					Measure_SequenceStep = 3;
@@ -582,6 +583,7 @@ oResult_t Measurement_ArraySensorSingle(IoTChannelConfig_t *pConfig)
 
 				if(++Trycount >= MEASURE_RETRY_MAXCOUNT || !Empty){
 					pIoTData->TiltArray.Type = IoTSensorType_ArraySingleTilt;
+					pIoTData->CountOfArraySensor = MaxIndex;
 					result = RESULT_OK;
 				}
 				else{
@@ -884,3 +886,9 @@ oResult_t Measurement_Supply(uint8_t Count)
 
 	return result;
 }
+
+/* History
+
+2026-06-26 | v0.1
+	- baseline (Mi_Measurement.c)
+*/

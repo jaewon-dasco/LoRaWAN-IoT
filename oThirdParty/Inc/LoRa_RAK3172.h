@@ -8,6 +8,8 @@
 #ifndef INC_LORA_RAK3172_H_
 #define INC_LORA_RAK3172_H_
 
+#define LORA_RAK3172_VERSION		0.1
+
 #include "ONE_ATCommend.h"
 #include "ONE_Common.h"
 
@@ -105,3 +107,9 @@ extern oResult_t RAK3172_Close();
 extern void RAK3172();
 
 #endif /* INC_LORA_RAK3172_H_ */
+
+/* History
+
+2026-06-26 | v0.1
+	- baseline (LoRa_RAK3172.h)
+*/

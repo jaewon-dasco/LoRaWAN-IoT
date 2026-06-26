@@ -1,6 +1,8 @@
 #ifndef INC_ONE_SERIAL_H_
 #define INC_ONE_SERIAL_H_
 
+#define ONE_SERIAL_VERSION		0.1
+
 #include "ONE_Common.h"
 
 typedef struct{
@@ -69,3 +71,9 @@ extern void oSerial_LogEnagle(oSerialHandler_t *pSerial, uint8_t Enable);
 extern void oSerial_Log(char* Title, const char* format, ...);
 
 #endif /* INC_ONE_TIMER_H_ */
+
+/* History
+
+2026-06-26 | v0.1
+	- baseline (ONE_Serial.h)
+*/

@@ -10,7 +10,7 @@
 
 #include "Mi_Main.h"
 
-#define MI_SW_REVISION				0.96
+#define MI_SW_REVISION				0.97
 
 /* History
 
@@ -129,6 +129,13 @@
 	  · oSerial_vPrint/PrintLine/Log: char-by-char → vsnprintf 한 번에 oSerial_Write (256B 로컬 버퍼)
 	  · oSerial_Write txInProgress 판정: HW state만 → IsTxBusy(SW) || hwBusy 결합
 	    (DMA 종료~콜백 race window 에서 청크 재전송되던 버그 해결)
+2026-06-26 | HW 2.4 | FW 0.97
+	- 공통 라이브러리 canonical(`100_Library/`) 동기화:
+	  · ONE_Common.h: STM32U5/H5/U0 ↔ L4 DMA 호환 매크로 신규 (ONE_DMA_GET_COUNTER/IS_CIRCULAR/SET_CIRCULAR)
+	  · ONE_ATCommend.h/.c: 직접 CNDTR/Init.Mode 접근을 ONE_DMA_* 매크로 사용으로 전환
+	  · ADC_NAU7802.c: switch default 줄바꿈 형식 정리
+	- 파일 인코딩 정규화: 일부 파일 LF → CRLF (EmbededCodingStyle 규칙)
+	- git 저장소 위치 컨벤션 확정: `WORK/.git`에서 관리 (PROJECT.md `## Git 저장소` 섹션 신규)
 */
 
 #endif /* INC_MI_SOFTWAREREVISION_H_ */

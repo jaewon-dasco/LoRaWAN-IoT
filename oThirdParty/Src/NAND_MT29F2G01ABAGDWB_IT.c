@@ -763,3 +763,9 @@ oResult_t MT29F2G_WritePage(MT29F2G_t *pMT29F2G, uint32_t Block, uint32_t Page, 
 	return MT29F2G_WriteByte(pMT29F2G, Block, Page, 0, pData, Size);
 }
 #endif
+
+/* History
+
+2026-06-26 | v0.1
+	- baseline (NAND_MT29F2G01ABAGDWB_IT.c)
+*/

@@ -54,3 +54,9 @@ double oMath_Median3(double a, double b, double c)
 
 	return b;
 }
+
+/* History
+
+2026-06-26 | v0.1
+	- baseline (ONE_Math.c)
+*/

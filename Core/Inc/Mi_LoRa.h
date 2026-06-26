@@ -8,6 +8,8 @@
 #ifndef INC_MI_LORA_H_
 #define INC_MI_LORA_H_
 
+#define MI_LORA_VERSION		0.1
+
 #include "Mi_IoT.h"
 #include "Mi_Main.h"
 
@@ -47,3 +49,9 @@ extern oResult_t MiLoRa_Close();
 extern void MiLoRa(UART_HandleTypeDef *pUART);
 
 #endif /* INC_MI_LORA_H_ */
+
+/* History
+
+2026-06-26 | v0.1
+	- baseline (Mi_LoRa.h)
+*/

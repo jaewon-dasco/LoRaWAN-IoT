@@ -7,6 +7,8 @@
 #ifndef INC_ADC_NAU7802_H_
 #define INC_ADC_NAU7802_H_
 
+#define ADC_NAU7802_VERSION		0.1
+
 #ifdef __HAL_I2C_ENABLE
 
 #include "Mi_Main.h"
@@ -200,3 +202,9 @@ extern oResult_t NAU7802_AnalogRead(NAU7802_t *pDev, uint8_t Channel, NAU7802_Sa
 extern oResult_t NAU7802_AnalogOverSampling(NAU7802_t *pDev, uint8_t Channel, NAU7802_SamplingRate_t SamplingRate, uint8_t SamplingCount, double *pAnalog);
 #endif
 #endif /* INC_ADC_NAU7802_H_ */
+
+/* History
+
+2026-06-26 | v0.1
+	- baseline (ADC_NAU7802.h)
+*/

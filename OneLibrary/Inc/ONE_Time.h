@@ -8,6 +8,8 @@
 #ifndef INC_ONE_TIME_H_
 #define INC_ONE_TIME_H_
 
+#define ONE_TIME_VERSION		0.1
+
 #include "ONE_Common.h"
 
 #if defined(RTC_OUTPUT_DISABLE)
@@ -146,3 +148,9 @@ extern uint32_t oDT_ToUnixTime(oDateAndTime_t DT);
 extern oDateAndTime_t oDT_FromUnixTime(uint32_t UnixTime);
 
 #endif /* INC_ONE_TIME_H_ */
+
+/* History
+
+2026-06-26 | v0.1
+	- baseline (ONE_Time.h)
+*/

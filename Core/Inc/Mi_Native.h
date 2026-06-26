@@ -1,6 +1,8 @@
 #ifndef INC_NATIVE_MEMORY_H_
 #define INC_NATIVE_MEMORY_H_
 
+#define MI_NATIVE_VERSION		0.1
+
 #include "ONE_Common.h"
 #include "Mi_Main.h"
 
@@ -33,3 +35,9 @@ extern oResult_t Native_SetPWM(TIM_HandleTypeDef *pTIM, uint32_t Frequency, uint
 #endif
 
 #endif
+
+/* History
+
+2026-06-26 | v0.1
+	- baseline (Mi_Native.h)
+*/

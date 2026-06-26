@@ -349,3 +349,9 @@ void oString_Right(char *Source, char *Destination, uint32_t Count)
 		*Destination++ = *i;
 	}
 }
+
+/* History
+
+2026-06-26 | v0.1
+	- baseline (ONE_Common.c)
+*/

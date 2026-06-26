@@ -8,6 +8,8 @@
 #ifndef NAND_MT29F2G01ABAGDWB_IT_H_
 #define NAND_MT29F2G01ABAGDWB_IT_H_
 
+#define NAND_MT29F2G01ABAGDWB_IT_VERSION		0.1
+
 #include "main.h"
 #include "ONE_Common.h"
 
@@ -179,3 +181,9 @@ extern oResult_t MT29F2G_WriteByte(MT29F2G_t *pMT29F2G, uint32_t Block, uint32_t
 
 #endif
 #endif /* NAND_MT29F2G01ABAGDWB_IT_H_ */
+
+/* History
+
+2026-06-26 | v0.1
+	- baseline (NAND_MT29F2G01ABAGDWB_IT.h)
+*/

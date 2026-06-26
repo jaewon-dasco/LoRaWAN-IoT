@@ -8,6 +8,8 @@
 #ifndef INC_MI_IOT_H_
 #define INC_MI_IOT_H_
 
+#define MI_IOT_VERSION		0.1
+
 #include "ONE_Time.h"
 #include "ONE_Signal.h"
 #include "Mi_Main.h"
@@ -190,8 +192,9 @@ typedef struct
 typedef struct
 {
 	IoTDateAndTime_t		Time;
-	IoTDataArrayItem_t		Analog;
+	IoTDataArrayItem_t		Analog;	
 	IoTSensorTiltArray_t	TiltArray;
+	uint32_t 				CountOfArraySensor;
 } IoTDataSIC100_2C_t;
 
 typedef struct
@@ -460,3 +463,9 @@ extern oDateAndTime_t MiMain_GetSamplingTime();
 extern void MiIoT();
 
 #endif /* INC_MI_IOT_H_ */
+
+/* History
+
+2026-06-26 | v0.1
+	- baseline (Mi_IoT.h)
+*/

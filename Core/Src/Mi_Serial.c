@@ -362,6 +362,14 @@ oResult_t MiSerial_Get(char *Message)
 		return RESULT_OK;
 	}
 
+	if(strstr(Message, "Get/SensorSamplingProgress") != NULL){
+		oSerial_Printf(&MiSerial_Handler, "{\r\n");
+		oSerial_Printf(&MiSerial_Handler, "\"Type\" : \"SensorSamplingProgress\",\r\n");
+		oSerial_Printf(&MiSerial_Handler, "\"Progress\" : \"%d\"\r\n", (int)MiSerial_SensorSamplingProgress);
+		oSerial_Printf(&MiSerial_Handler, "};\r\n");
+		return RESULT_OK;
+	}
+
 	if(strstr(Message, "Get/DeviceInfo") != NULL){
 		oSerial_Printf(&MiSerial_Handler, "{\r\n");
 		oSerial_Printf(&MiSerial_Handler, "\"Type\" : \"DeviceInfo\",\r\n");
@@ -589,3 +597,9 @@ __weak void MiSerial(UART_HandleTypeDef *pUART)
 
 	MiSerial_PrintResponse("UndefinedType", "ERROR");
 }
+
+/* History
+
+2026-06-26 | v0.1
+	- baseline (Mi_Serial.c)
+*/

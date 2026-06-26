@@ -8,6 +8,8 @@
 #ifndef INC_ONE_COMMON_H_
 #define INC_ONE_COMMON_H_
 
+#define ONE_COMMON_VERSION		0.1
+
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -121,3 +123,9 @@ extern uint8_t oString_Delete(char *Source, char *Delete);
 extern void oString_Left(char *Source, char *Destination, uint32_t Count);
 extern void oString_Right(char *Source, char *Destination, uint32_t Count);
 #endif /* INC_ONE_TIMER_H_ */
+
+/* History
+
+2026-06-26 | v0.1
+	- baseline (ONE_Common.h)
+*/

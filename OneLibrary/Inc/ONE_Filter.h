@@ -12,6 +12,8 @@
 #ifndef INC_ONE_FILTER_H_
 #define INC_ONE_FILTER_H_
 
+#define ONE_FILTER_VERSION		0.1
+
 #include "ONE_Math.h"
 
 /* ============================================================
@@ -111,3 +113,9 @@ extern uint8_t oMoveAverage_GetData(oMoveAverage_t *pAverage, void *pData);
 extern oRange_t oMoveAverage_GetRange(oMoveAverage_t *pAvg);
 
 #endif /* INC_ONE_FILTER_H_ */
+
+/* History
+
+2026-06-26 | v0.1
+	- baseline (ONE_Filter.h)
+*/

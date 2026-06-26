@@ -297,22 +297,7 @@ void MiSerial_PrintSensorData(IoT_DataPacket_t *pPacket)
 
 	/* Channel 1 - TiltArray. 센서 개수는 패킷에서 추론 — 마지막 non-zero entry index+1 */
 	if(hasCh1){
-		sensorCount = 0;
-
-		if(tiltType == IoTSensorType_ArrayDualTilt){
-			for(i=0; i<MIIOT_ARRAYSENSOR_MAX_COUNT; i++){
-				if(pData->TiltArray.Dual[i].AxisX != 0 || pData->TiltArray.Dual[i].AxisY != 0){
-					sensorCount = i + 1;
-				}
-			}
-		}
-		else{
-			for(i=0; i<MIIOT_ARRAYSENSOR_MAX_COUNT; i++){
-				if(pData->TiltArray.Single[i].Axis != 0){
-					sensorCount = i + 1;
-				}
-			}
-		}
+		sensorCount = pData->CountOfArraySensor;
 
 		oSerial_Printf(&MiSerial_Handler, "{\r\n");
 		oSerial_Printf(&MiSerial_Handler, "  \"Channel\" : \"1\",\r\n");
@@ -440,3 +425,9 @@ void MiSerial_Process()
 		MiSerial_IsScan = 0;
 	}
 }
+
+/* History
+
+2026-06-26 | v0.1
+	- baseline (Mi_Serial_SIC100.c)
+*/

@@ -8,11 +8,13 @@
 #ifndef INC_MI_SERIAL_H_
 #define INC_MI_SERIAL_H_
 
+#define MI_SERIAL_VERSION		0.1
+
 #include "Mi_IoT.h"
 #include "Mi_Main.h"
 #include "ONE_Serial.h"
 
-#define MISERIAL_TX_BUFFER_SIZE		1
+#define MISERIAL_TX_BUFFER_SIZE		1000
 #define MISERIAL_RX_BUFFER_SIZE		1000
 
 extern uint8_t MiSerial_TxBuffer[MISERIAL_TX_BUFFER_SIZE];
@@ -34,3 +36,9 @@ extern oResult_t MiSerial_SetChannelConfig(char *Message, IoTParameter_t *pParam
 extern void MiSerial(UART_HandleTypeDef *pUART);
 
 #endif /* INC_MI_SERIAL_H_ */
+
+/* History
+
+2026-06-26 | v0.1
+	- baseline (Mi_Serial.h)
+*/
