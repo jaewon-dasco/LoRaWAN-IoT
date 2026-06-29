@@ -1,8 +1,7 @@
 /*
  * ONE_Math.c
  *
- *  Created on: Feb 7, 2025
- *      Author: JONE
+ *  Version: 0.1 (2026-06-29)
  */
 #include "ONE_Math.h"
 

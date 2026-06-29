@@ -10,7 +10,7 @@
 
 #include "Mi_Main.h"
 
-#define MI_SW_REVISION				0.97
+#define MI_SW_REVISION				0.98
 
 /* History
 
@@ -136,6 +136,17 @@
 	  · ADC_NAU7802.c: switch default 줄바꿈 형식 정리
 	- 파일 인코딩 정규화: 일부 파일 LF → CRLF (EmbededCodingStyle 규칙)
 	- git 저장소 위치 컨벤션 확정: `WORK/.git`에서 관리 (PROJECT.md `## Git 저장소` 섹션 신규)
+2026-06-29 | HW 2.4 | FW 0.98
+	- 측정 시퀀스 수정 — encode error 해결:
+	  · Measurement_ArraySensorDual/Single: TiltArray.Type / CountOfArraySensor 설정을
+	    RESULT_OK 분기 안 → EXIT 직전(result != RESULT_RUN)으로 이동
+	  · 측정 sub-func가 RESULT_ERROR(CAN open 실패 등)로 끝나도 채널 메타가 유효하게 채워짐
+	    → MiLoRa_Encode 첫 시퀀스에서 hasTilt=0/totalSensors=0로 SizeofData=0 반환되던 버그 해결
+	  · 효과: 측정 실패 시에도 빈 패킷이 정상 인코딩되어 송신, 서버는 슬롯 0(-180)으로 디코드
+	- .c 헤더 주석 형식 일괄 정리:
+	  · "ONE_Debug.c" 같은 잘못된 파일명 → 실제 파일명으로 교정 (181개)
+	  · Created on/Author 라인 제거 → "Version: X.Y (YYYY-MM-DD)" 한 줄로 통일
+	  · OneLibrary/oThirdParty/Core/Mi_*.c 184개 일괄 적용 (canonical + 7 IoT 프로젝트)
 */
 
 #endif /* INC_MI_SOFTWAREREVISION_H_ */

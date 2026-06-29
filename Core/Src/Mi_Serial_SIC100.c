@@ -1,8 +1,7 @@
 /*
- * Mi_Serial.c
+ * Mi_Serial_SIC100.c
  *
- *  Created on: Feb 28, 2025
- *      Author: JONE
+ *  Version: 0.1 (2026-06-29)
  */
 #include "stdarg.h"
 #include "stdio.h"

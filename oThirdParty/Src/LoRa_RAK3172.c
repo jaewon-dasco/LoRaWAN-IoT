@@ -1,8 +1,7 @@
 /*
  * LoRa_RAK3172.c
  *
- *  Created on: Apr 29, 2025
- *      Author: JONE
+ *  Version: 0.1 (2026-06-29)
  */
 #include <stdlib.h>
 #include "LoRa_RAK3172.h"

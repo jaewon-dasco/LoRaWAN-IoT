@@ -1,8 +1,7 @@
 /*
- * ONE_Debug.c
+ * ONE_Serial.c
  *
- *  Created on: Sep 5, 2024
- *      Author: JONE
+ *  Version: 0.1 (2026-06-29)
  */
 
 #include "stdarg.h"

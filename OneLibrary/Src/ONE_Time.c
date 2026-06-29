@@ -1,8 +1,7 @@
 /*
- * ONE_Timer.c
+ * ONE_Time.c
  *
- * Created: 2024-08-27 오전 11:55:38
- *  Author: JONE
+ *  Version: 0.1 (2026-06-29)
  */
 #include "ONE_Math.h"
 #include "ONE_Time.h"

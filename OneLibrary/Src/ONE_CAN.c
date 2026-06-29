@@ -1,8 +1,7 @@
 /*
- * Mi_CAN.c
+ * ONE_CAN.c
  *
- *  Created on: Dec 3, 2024
- *      Author: JONE
+ *  Version: 0.1 (2026-06-29)
  */
 #include "ONE_Memory.h"
 #include "ONE_Time.h"

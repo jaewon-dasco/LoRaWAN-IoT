@@ -1,6 +1,11 @@
 /*
  * Mi_LoRa_SIC100.c
  *
+ *  Version: 0.1 (2026-06-29)
+ */
+/*
+ * Mi_LoRa_SIC100.c
+ *
  * SIC100_2C 디바이스 LoRa 페이로드 인코더.
  * MiLoRa_Encode 가 디바이스별 데이터 타입 분기를 책임지며, 다른 모델은
  * Mi_LoRa_<MODEL>.c 에서 동일한 시그니처로 별도 구현한다.

@@ -1,8 +1,7 @@
 /*
  * Mi_IoT.c
  *
- *  Created on: Nov 29, 2024
- *      Author: JONE
+ *  Version: 0.1 (2026-06-29)
  */
 
 #include "Mi_Native.h"

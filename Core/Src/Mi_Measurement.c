@@ -1,8 +1,7 @@
 /*
- * Mi_Sensor.c
+ * Mi_Measurement.c
  *
- *  Created on: Dec 9, 2024
- *      Author: JONE
+ *  Version: 0.1 (2026-06-29)
  */
 
 #include "Mi_Native.h"
@@ -442,8 +441,6 @@ oResult_t Measurement_ArraySensorDual(IoTChannelConfig_t *pConfig)
 
 				if(++Trycount >= MEASURE_RETRY_MAXCOUNT || !Empty){
 					result = RESULT_OK;
-					pIoTData->TiltArray.Type = IoTSensorType_ArrayDualTilt;
-					pIoTData->CountOfArraySensor = MaxIndex;
 				}
 				else{
 					Measure_SequenceStep = 3;
@@ -454,6 +451,9 @@ oResult_t Measurement_ArraySensorDual(IoTChannelConfig_t *pConfig)
 
 EXIT:
 	if(result != RESULT_RUN){
+		pIoTData->TiltArray.Type = IoTSensorType_ArrayDualTilt;
+		pIoTData->CountOfArraySensor = MaxIndex;
+
 		Measure_SequenceStep = 0;
 		Measure_CanErrorCount = 0;
 		oCAN_ResetReceiveCallback(pVxD, Measurement_RecieveCallback_ArrayDual);
@@ -582,8 +582,6 @@ oResult_t Measurement_ArraySensorSingle(IoTChannelConfig_t *pConfig)
 				}
 
 				if(++Trycount >= MEASURE_RETRY_MAXCOUNT || !Empty){
-					pIoTData->TiltArray.Type = IoTSensorType_ArraySingleTilt;
-					pIoTData->CountOfArraySensor = MaxIndex;
 					result = RESULT_OK;
 				}
 				else{
@@ -595,6 +593,9 @@ oResult_t Measurement_ArraySensorSingle(IoTChannelConfig_t *pConfig)
 
 EXIT:
 	if(result != RESULT_RUN){
+		pIoTData->TiltArray.Type = IoTSensorType_ArraySingleTilt;
+		pIoTData->CountOfArraySensor = MaxIndex;
+
 		Measure_SequenceStep = 0;
 		Measure_CanErrorCount = 0;
 		oCAN_ResetReceiveCallback(0, Measurement_RecieveCallback_ArraySingle);

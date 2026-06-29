@@ -1,8 +1,7 @@
 /*
  * ADC_NAU7802.c
  *
- *  Created on: Jan 27, 2025
- *      Author: JONE
+ *  Version: 0.1 (2026-06-29)
  */
 #include "ONE_Time.h"
 #include "ADC_NAU7802.h"

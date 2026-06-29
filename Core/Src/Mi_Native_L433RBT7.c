@@ -1,8 +1,7 @@
 /*
- * ONE_HAL.c
+ * Mi_Native_L433RBT7.c
  *
- *  Created on: Mar 13, 2025
- *      Author: JONE
+ *  Version: 0.1 (2026-06-29)
  */
 
 #include "main.h"
