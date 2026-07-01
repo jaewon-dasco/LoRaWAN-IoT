@@ -30,6 +30,8 @@
 #define MEASURE_RETRY_MAXCOUNT			5
 #define MEASURE_AVERAGE_SIZE			15 //16bit x 50개
 #define MEASURE_CAN_ERROR_MAXCOUNT		3
+#define MEASURE_SUPPLY_LOW_THRESHOLD	2500	/* SystemSupply 재측정 임계값 (mV) */
+#define MEASURE_SUPPLY_RETRY_MAX		3	/* 저전압 재측정 최대 횟수 */
 
 GPIOs_t Measure_SupplyVolt;
 NAU7802_t NAU7802;
@@ -822,6 +824,7 @@ oResult_t Measurement_Supply(uint8_t Count)
 {
 	static uint8_t ReadSupplyStep = 0;
 	static uint32_t ReadSupplyTimer = 0;
+	static uint8_t SupplyRetryCount = 0;
 	double Analog;
 	uint16_t Data = 0;
 	oResult_t result = RESULT_RUN;
@@ -829,15 +832,18 @@ oResult_t Measurement_Supply(uint8_t Count)
 	switch(ReadSupplyStep)
 	{
 		case 0:
-			ReadSupplyStep++;
+			/* 재측정 시 DCDC 방전 대기. 첫 호출은 timer=0 이미 초과 → 즉시 통과. */
+			if(oTMR_Elapsed(&ReadSupplyTimer, 300, TICKBASE_SYSTICK)){
+				ReadSupplyStep++;
+			}
 			break;
 		case 1:
 			ReadSupplyTimer = oTMR_GetTick(TICKBASE_SYSTICK);
-
 			GPIOs.DO.ADCRefEnable = 1;
 			ReadSupplyStep++;
+			break;
 		case 2:
-			if(oTMR_Trigger(&ReadSupplyTimer, 100, 1, TICKBASE_SYSTICK)){
+			if(oTMR_Elapsed(&ReadSupplyTimer, 500, TICKBASE_SYSTICK)){
 				ReadSupplyStep++;
 			}
 			break;
@@ -855,6 +861,7 @@ oResult_t Measurement_Supply(uint8_t Count)
 					Analog = (double)ADC_TO_SUPPLY(Data);
 					GPIOs.ADC.SystemSupply = (uint16_t)oLinear(&MiIoT_Parameter.SystemConfig.Calibration.ADC[0], Analog, 0); //Offset, Gain 보정
 					ReadSupplyStep++;
+					oSerial_Log("Measurement", "Read SupplyVolt %d mV", (int)GPIOs.ADC.SystemSupply);
 					break;
 				default:
 					ReadSupplyStep++;
@@ -869,6 +876,7 @@ oResult_t Measurement_Supply(uint8_t Count)
 				case RESULT_OK:
 					GPIOs.ADC.InternalBAT = (uint16_t)ADC_TO_VBAT(Data);
 					ReadSupplyStep++;
+					oSerial_Log("Measurement", "Read InternalBatVolt %d mV", (int)GPIOs.ADC.InternalBAT);
 					break;
 				default:
 					ReadSupplyStep++;
@@ -881,15 +889,19 @@ oResult_t Measurement_Supply(uint8_t Count)
 	}
 
 	if(result != RESULT_RUN){
-		ReadSupplyStep = 1;
+		ReadSupplyStep = 0;
+		ReadSupplyTimer = oTMR_GetTick(TICKBASE_SYSTICK);
 		GPIOs.DO.ADCRefEnable = 0;
+
+		if((GPIOs.ADC.SystemSupply < MEASURE_SUPPLY_LOW_THRESHOLD || GPIOs.ADC.InternalBAT < MEASURE_SUPPLY_LOW_THRESHOLD) && SupplyRetryCount < MEASURE_SUPPLY_RETRY_MAX){
+			result = RESULT_RUN;
+			SupplyRetryCount++;
+			oSerial_Log("Measurement", "Supply low sys=%d bat=%d retry %d/%d", (int)GPIOs.ADC.SystemSupply, (int)GPIOs.ADC.InternalBAT, (int)SupplyRetryCount, (int)MEASURE_SUPPLY_RETRY_MAX);
+		}
+		else{
+			SupplyRetryCount = 0;
+		}
 	}
 
 	return result;
 }
-
-/* History
-
-2026-06-26 | v0.1
-	- baseline (Mi_Measurement.c)
-*/
