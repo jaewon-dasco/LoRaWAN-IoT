@@ -564,9 +564,3 @@ void oSerial_Log(char* Title, const char* format, ...)
 	}
 }
 #endif
-
-/* History
-
-2026-06-26 | v0.1
-	- baseline (ONE_Serial.c)
-*/

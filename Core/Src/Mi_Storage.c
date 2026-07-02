@@ -851,9 +851,3 @@ void MiStorage()
 		oSerial_Log("MiStorage", "ErrCnt>3->IsFault");
 	}
 }
-
-/* History
-
-2026-06-26 | v0.1
-	- baseline (Mi_Storage.c)
-*/

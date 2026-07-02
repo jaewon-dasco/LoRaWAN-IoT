@@ -1,7 +1,7 @@
 /*
  * ONE_ATCommend.c
  *
- *  Version: 0.1 (2026-06-29)
+ *  Version: 0.2 (2026-06-30)
  */
 #include <math.h>
 #include <stdio.h>
@@ -28,8 +28,8 @@ oATResult_t oAT_UartRecovery(oATCommend_t *pAT)
 	}
 
 	/* DMA Circular 모드 확인 - 링버퍼 미설정 시 Circular로 재설정 */
-	if(pAT->pUART->hdmarx->Init.Mode != DMA_CIRCULAR){
-		pAT->pUART->hdmarx->Init.Mode = DMA_CIRCULAR;
+	if(!ONE_DMA_IS_CIRCULAR(pAT->pUART->hdmarx)){
+		ONE_DMA_SET_CIRCULAR(pAT->pUART->hdmarx);
 		if(HAL_DMA_Init(pAT->pUART->hdmarx) != HAL_OK){
 			return AT_RESULT_ERROR;
 		}
@@ -291,7 +291,7 @@ oATResult_t oAT_TransmitBuffer(oATCommend_t *pAT)
 			if(AT_TRANSMIT_BUFFER_COUNT(pAT) <= 0){
 				return AT_RESULT_NULL;
 			}
-			else if(pAT->pUART->gState != HAL_UART_STATE_READY || (pAT->pUART->hdmatx != NULL && pAT->pUART->hdmatx->Instance->CNDTR != 0)){
+			else if(pAT->pUART->gState != HAL_UART_STATE_READY || (pAT->pUART->hdmatx != NULL && ONE_DMA_GET_COUNTER(pAT->pUART->hdmatx) != 0)){
 				return AT_RESULT_BUSY;
 			}
 			ATTransmitBufferStep++;
@@ -611,8 +611,8 @@ oATResult_t oAT_Open(oATCommend_t *pAT)
 	}
 
 	/* DMA Circular 모드 확인 - 링버퍼 미설정 시 Circular로 설정 */
-	if(pAT->pUART->hdmarx->Init.Mode != DMA_CIRCULAR){
-		pAT->pUART->hdmarx->Init.Mode = DMA_CIRCULAR;
+	if(!ONE_DMA_IS_CIRCULAR(pAT->pUART->hdmarx)){
+		ONE_DMA_SET_CIRCULAR(pAT->pUART->hdmarx);
 		if(HAL_DMA_Init(pAT->pUART->hdmarx) != HAL_OK){
 			return AT_RESULT_ERROR;
 		}
@@ -654,9 +654,3 @@ void oAT_Proc(oATCommend_t *pAT)
 	oAT_ReceiveFromDMA(pAT);
 }
 #endif
-
-/* History
-
-2026-06-26 | v0.1
-	- baseline (ONE_ATCommend.c)
-*/

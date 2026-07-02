@@ -759,9 +759,3 @@ oResult_t Native_SetPWM(TIM_HandleTypeDef *pTIM, uint32_t Frequency, uint32_t Ch
     return RESULT_OK;
 }
 #endif
-
-/* History
-
-2026-06-26 | v0.1
-	- baseline (Mi_Native_L433RBT7.c)
-*/

@@ -273,9 +273,3 @@ uint8_t oDelay_AutoOff(oDelay_t *pDelay)
 
     return pDelay->Output;
 }
-
-/* History
-
-2026-06-26 | v0.1
-	- baseline (ONE_Signal.c)
-*/

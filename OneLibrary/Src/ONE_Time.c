@@ -653,9 +653,3 @@ void RTC_SetDate (uint8_t Year, uint8_t Month, uint8_t Date)
 	HAL_RTC_SetDate(&hrtc, &RTC_Date, RTC_FORMAT_BIN);
 }
 #endif
-
-/* History
-
-2026-06-26 | v0.1
-	- baseline (ONE_Time.c)
-*/

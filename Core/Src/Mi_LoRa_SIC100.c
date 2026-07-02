@@ -167,9 +167,3 @@ uint32_t MiLoRa_Encode(IoT_MailboxItem_t *pMail, uint8_t SeqeunceCount, uint8_t 
 
 	return SizeofData;
 }
-
-/* History
-
-2026-06-26 | v0.1
-	- baseline (Mi_LoRa_SIC100.c)
-*/

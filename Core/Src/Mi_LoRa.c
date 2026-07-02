@@ -753,9 +753,3 @@ void MiLoRa(UART_HandleTypeDef *pUART)
 	MiLoRa_MailBoxTransmitScheduler();	// 메일박스 전송 스케줄러
 	RAK3172();							// RAK3172 AT 명령 송수신 처리
 }
-
-/* History
-
-2026-06-26 | v0.1
-	- baseline (Mi_LoRa.c)
-*/

@@ -532,9 +532,3 @@ oResult_t oCAN_Open(oCANVxD_t **ppVxD, CAN_TypeDef *pCAN, uint16_t Bitrate)
 	return RESULT_OK;
 }
 #endif
-
-/* History
-
-2026-06-26 | v0.1
-	- baseline (ONE_CAN.c)
-*/

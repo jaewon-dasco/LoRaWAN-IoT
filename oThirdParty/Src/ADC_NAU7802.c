@@ -596,9 +596,3 @@ oResult_t NAU7802_AnalogOverSampling(NAU7802_t *pDev, uint8_t Channel, NAU7802_S
 	return result;
 }
 #endif
-
-/* History
-
-2026-06-26 | v0.1
-	- baseline (ADC_NAU7802.c)
-*/

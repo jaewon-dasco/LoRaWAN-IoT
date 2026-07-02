@@ -614,8 +614,7 @@ oResult_t MiMain_UpdateStatus()
 	return result;
 }
 
-
-void MiMain (void)
+void MiMain(void)
 {
 	static uint8_t MiMainStep = 0;
 
@@ -643,9 +642,3 @@ void MiMain (void)
 			break;
 	}
 }
-
-/* History
-
-2026-06-26 | v0.1
-	- baseline (Mi_Main_SIC100.c)
-*/

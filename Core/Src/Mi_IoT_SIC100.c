@@ -70,9 +70,3 @@ oResult_t MiIoT_IsSensorData(IoTProductType_t ProductCode, IoT_DataPacket_t *pPa
 
 	return RESULT_ERROR;
 }
-
-/* History
-
-2026-06-26 | v0.1
-	- baseline (Mi_IoT_SIC100.c)
-*/
