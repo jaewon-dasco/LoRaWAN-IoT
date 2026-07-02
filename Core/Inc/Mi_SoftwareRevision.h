@@ -10,7 +10,7 @@
 
 #include "Mi_Main.h"
 
-#define MI_SW_REVISION				0.98
+#define MI_SW_REVISION				0.99
 
 /* History
 
@@ -147,6 +147,10 @@
 	  · "ONE_Debug.c" 같은 잘못된 파일명 → 실제 파일명으로 교정 (181개)
 	  · Created on/Author 라인 제거 → "Version: X.Y (YYYY-MM-DD)" 한 줄로 통일
 	  · OneLibrary/oThirdParty/Core/Mi_*.c 184개 일괄 적용 (canonical + 7 IoT 프로젝트)
+2026-07-02 | HW 2.4 | FW 0.99
+	- MiSerial_Handler·MiSerial_RxBuffer 정의를 공통 Mi_Serial.c → 모델별 Mi_Serial_SIC100.c로 이동
+	  · 모델별 TX/RX 버퍼 구성 분리 (SIV100 패턴 통일)
+	  · pTxBuffer=NULL, MiSerial_TxBuffer 정의 주석 처리 (미사용)
 */
 
 #endif /* INC_MI_SOFTWAREREVISION_H_ */

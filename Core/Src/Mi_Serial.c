@@ -14,16 +14,7 @@
 #include "Mi_Serial.h"
 #include "ONE_Serial.h"
 
-oSerialHandler_t MiSerial_Handler = {
-	.pTxBuffer = MiSerial_TxBuffer,
-	.SizeOfTxBuffer = MISERIAL_TX_BUFFER_SIZE,
-	.pRxBuffer = MiSerial_RxBuffer,
-	.SizeOfRxBuffer = MISERIAL_RX_BUFFER_SIZE,
-};
-
 char StrBuffer[MISERIAL_RX_BUFFER_SIZE];
-uint8_t MiSerial_TxBuffer[MISERIAL_TX_BUFFER_SIZE];
-uint8_t MiSerial_RxBuffer[MISERIAL_RX_BUFFER_SIZE];
 
 uint8_t MiSerial_UpdateSensorCmd;
 uint8_t MiSerial_StopSensorCmd;
@@ -596,9 +587,3 @@ __weak void MiSerial(UART_HandleTypeDef *pUART)
 
 	MiSerial_PrintResponse("UndefinedType", "ERROR");
 }
-
-/* History
-
-2026-06-26 | v0.1
-	- baseline (Mi_Serial.c)
-*/
