@@ -185,6 +185,11 @@
 	  · CH2 Analog 측정 실패 마커(Analog.Type==NULL) 감지 시 해당 채널 재측정
 	  · MiMain_UpdateSampling: 공급전압 선검사 + 저전압 가드 추가 (SensorSamplingProgress 유지)
 	  · MiMain(): Init 단계 HAL_I2C_DeInit(&hi2c2) 추가
+	- Mi_IoT v0.2 → v0.3 (SIM100 발신, 전 프로젝트 + 99_Common 동기화):
+	  · MiIoT_Sleep 상태머신 정리 — SleepMode=0 클리어를 default로 일원화,
+	    case 4 wake 완료 시 default 경유 리셋
+	  · 5ms idle 유예 + SleepMode=1 설정 + step 전진의 원자적 결합 유지
+	    (유예 구간 = period/sensor/status가 busy 비트를 선점하는 시간)
 */
 
 #endif /* INC_MI_SOFTWAREREVISION_H_ */
