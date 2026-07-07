@@ -1,7 +1,7 @@
 /*
  * Mi_Measurement.c
  *
- *  Version: 0.1 (2026-06-29)
+ *  Version: 0.2 (2026-07-07)
  */
 
 #include "Mi_Native.h"
@@ -89,8 +89,8 @@ oResult_t Measurement_CalibrateVDD(void)
 
 void Measurement_RecieveCallback_Scan(oCANMessage_t* Message, uint32_t Arguemnt)
 {
-	if(Message->ID < SensorStartId || Message->ID > (SensorStartId+MEASUREMENT_NODE_MAXCOUNT) || Message->DLC <= 0){
-		return;
+	if(Message->ID < SensorStartId || Message->ID >= (SensorStartId+MEASUREMENT_NODE_MAXCOUNT) || Message->DLC <= 0){
+		return;	/* [Message->ID - SensorStartId]가 배열 크기(MEASUREMENT_NODE_MAXCOUNT)를 넘지 않도록 상한 조임 */
 	}
 
 	Measure_ScanIdList[Message->ID-SensorStartId] = Message->ID;
@@ -108,7 +108,7 @@ void Measurement_RecieveCallback_ArrayDual(oCANMessage_t* Message, uint32_t Argu
 
 	ReceivedId = Message->ID;
 
-	if(ReceivedId >= SensorStartId && (ReceivedId-SensorStartId) <= MIIOT_ARRAYSENSOR_MAX_COUNT)
+	if(ReceivedId >= SensorStartId && (ReceivedId-SensorStartId) < MIIOT_ARRAYSENSOR_MAX_COUNT)
 	{
 		ReceiveMessage = *Message;
 
@@ -147,7 +147,7 @@ void Measurement_RecieveCallback_ArraySingle(oCANMessage_t* Message, uint32_t Ar
 
 	ReceivedId = Message->ID;
 
-	if(ReceivedId >= SensorStartId && (ReceivedId-SensorStartId) <= MIIOT_ARRAYSENSOR_MAX_COUNT)
+	if(ReceivedId >= SensorStartId && (ReceivedId-SensorStartId) < MIIOT_ARRAYSENSOR_MAX_COUNT)
 	{
 		ReceiveMessage = *Message;
 
@@ -248,12 +248,12 @@ oResult_t Measurement_Scan(uint8_t Channel, uint32_t StartId, uint32_t EndId, ui
 			}
 			break;
 		case 4:
-			if(SensorStartId + IdIndex > EndId){
+			if(SensorStartId + IdIndex > EndId || IdIndex >= MEASUREMENT_NODE_MAXCOUNT){
 				MeasurementScanStep++;
 				IdIndex = 0;
 				MeasurementScanTimer = oTMR_GetTick(TICKBASE_SYSTICK);
 			}
-			else if(Measure_ScanIdList[SensorStartId+IdIndex] != 0){
+			else if(Measure_ScanIdList[IdIndex] != 0){	/* 저장은 [ID - SensorStartId]로 0-based, 조회도 동일 index 사용 */
 				IdIndex++;
 			}
 			else if(oTMR_Elapsed(&TransmitMessage.Timestamp, 5, TICKBASE_SYSTICK)){
@@ -691,8 +691,10 @@ oResult_t Measurement_Analog(IoTChannelConfig_t *pConfig)
 	}
 
 	if(result != RESULT_RUN){
+		/* 실패 마커 규약: 측정 실패해도 Type은 채널 설정으로 유지, Data는 0 (초기값) */
+		pIoTData->Analog.Type = pConfig->TypeOfSensor;
+
 		if(result == RESULT_OK){
-			pIoTData->Analog.Type = pConfig->TypeOfSensor;
 			if(pConfig->TypeOfSensor == IoTSensorType_mA){
 				pIoTData->Analog.Data = MIIOT_DATA_ENCODE_mA(FinalAnalog/249);
 			}

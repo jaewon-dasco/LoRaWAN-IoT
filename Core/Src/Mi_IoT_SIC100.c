@@ -1,7 +1,7 @@
 /*
  * Mi_IoT_SIC100.c
  *
- *  Version: 0.1 (2026-06-29)
+ *  Version: 0.11 (2026-07-07)
  */
 
 #include "Mi_IoT.h"
@@ -64,7 +64,7 @@ oResult_t MiIoT_IsSensorData(IoTProductType_t ProductCode, IoT_DataPacket_t *pPa
 		return RESULT_NULL;
 	}
 
-	if(pPayload->TypeOfData == IoTDataType_ArrayDualTilt || pPayload->TypeOfData == IoTDataType_ArraySingleTilt || pPayload->TypeOfData == IoTDataType_Tilt || pPayload->TypeOfData == IoTDataType_Analog){
+	if(pPayload->TypeOfData == IoTDataType_ArrayDualTilt || pPayload->TypeOfData == IoTDataType_ArraySingleTilt || pPayload->TypeOfData == IoTDataType_Tilt || pPayload->TypeOfData == IoTDataType_Analog || pPayload->TypeOfData == IoTDataType_DataArray_Type2){
 		return RESULT_OK;
 	}
 

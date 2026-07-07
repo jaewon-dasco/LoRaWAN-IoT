@@ -8,7 +8,7 @@
 #ifndef INC_MI_IOT_H_
 #define INC_MI_IOT_H_
 
-#define MI_IOT_VERSION		0.3
+#define MI_IOT_VERSION		0.4
 
 #include "ONE_Time.h"
 #include "ONE_Signal.h"
@@ -503,4 +503,13 @@ extern void MiIoT();
 	    (SleepMode 클리어 지점을 default 한 곳으로 일원화)
 	  · case 0: 5ms idle 유예 + SleepMode=1 설정 + step 전진의 원자적 결합 유지
 	    (유예 구간은 period/sensor/status가 busy 비트를 선점하는 시간 — 설계 의도 주석 추가)
+2026-07-07 | v0.4
+	- MiIoT_UpdatePeriod 재측정 대기 중 sleep 허용:
+	  · RESULT_WAIT 시 SamplingPeriod=0 클리어 + 100ms holdoff 타이머 설정
+	    → case 1 재진입을 100ms 지연시켜 플래그 연속 0 유지 → 5ms idle 디바운스 통과 → STOP 진입 가능
+	  · 기존: WAIT 루프(1→2→3→1)가 SamplingPeriod=1 유지 → RetryInterval 내내(최대 수 분) MCU active
+	  · STOP 중 tick은 Native_SleepMode의 wake 후 보상(+MIIOT_SLEEP_TIME)으로 RetryInterval 판정 유지
+	  · case 0에서 holdoff 리셋 — 정상 측정 흐름(첫 진입·OK 재진입)은 지연 없음
+	- MiIoT_UpdatePeriod 내부 명명 정리: MiIoT_MeasurementStep/MeasurementStarted/MeasurementPeriodOk
+	  → UpdatePeriodStep/UpdatePeriodStarted/UpdatedPeriod_IsOk
 */

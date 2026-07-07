@@ -1,7 +1,7 @@
 /*
  * Mi_Main_SIC100.c
  *
- *  Version: 0.3 (2026-07-07)
+ *  Version: 0.31 (2026-07-07)
  */
 #include "ONE_CAN.h"
 #include "ONE_Signal.h"
@@ -235,6 +235,10 @@ uint8_t MiMain_DataIsError(IoTDataSIC100_2C_t *pReference, IoTDataSIC100_2C_t *p
 			if(pReference->Analog.Type != pConfig->TypeOfSensor || pCompare->Analog.Type != pConfig->TypeOfSensor){
 				break;
 			}
+			/* 실패 마커(Data=0)는 비교 배제 — 정상값을 -34000mV로 오인해 불필요한 재측정 반복 방지 */
+			if(pReference->Analog.Data == 0 || pCompare->Analog.Data == 0){
+				break;
+			}
 			if(pConfig->TypeOfSensor == IoTSensorType_mV){
 				error = MIIOT_DATA_DECODE_mV(pReference->Analog.Data) - MIIOT_DATA_DECODE_mV(pCompare->Analog.Data);
 			}
@@ -332,9 +336,11 @@ oResult_t MiMain_UpdateMeasure(IoT_DataPacket_t **ppPacket)
 						continue;
 					}
 
-					/* CH2 Analog 측정 실패 마커 (Type=NULL) → 재측정 요청 */
+					/* CH2 Analog 측정 실패 마커 (Data=0) → 재측정 요청
+					 * Type은 Measurement_Analog가 성공/실패 모두 pConfig->TypeOfSensor로 설정 (실패 마커 규약).
+					 * 실패 판별은 Data==0(초기값)으로 확인. */
 					if((pConfig->TypeOfSensor == IoTSensorType_mV || pConfig->TypeOfSensor == IoTSensorType_mA) &&
-					   pSampling->Analog.Type == IoTSensorType_NULL){
+					   pSampling->Analog.Data == 0){
 						oMEM_SetBit(&ChDoneBits, k, 0);
 						oSerial_Log("UpdateMeasure", "CH%d measurement failed → retry", (int)(k+1));
 						continue;
@@ -491,7 +497,9 @@ oResult_t MiMain_UpdateStatus(IoT_DataPacket_t **ppPacket)
 			oSerial_Log("IoTStatus", "SupplyVolt : %d | SWVersion : %d | StatusBit : %d\r\n", (int)MiIoT_Status.SystemSupply, (int)MiIoT_Status.SoftwareVersion, (int)MiIoT_Status.StatusBits.Bits);
 		}
 	}
-
+	else{
+		result = RESULT_OK;
+	}
 
 	DataPacket.TypeOfData  = IoTDataType_Status;
 	DataPacket.DLC  = sizeof(IoTDataStatus_t);

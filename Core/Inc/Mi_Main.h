@@ -1,7 +1,7 @@
 #ifndef INC_MI_MAIN_H_
 #define INC_MI_MAIN_H_
 
-#define MI_MAIN_VERSION		0.3
+#define MI_MAIN_VERSION		0.31
 
 #include "ONE_Math.h"
 #include "ONE_Signal.h"
@@ -95,4 +95,15 @@ extern void MiMain(void);
 	  · MiMain_IsError/GetMeasureStableData → MiMain_DataIsError(채널 단위)로 교체
 	- Mi_Main_SIC100.c: MiMain_UpdateSampling에 공급전압 선검사 + 저전압 가드 추가 (SIM100 동일)
 	- Mi_Main_SIC100.c: MiMain() case 1에 HAL_I2C_DeInit(&hi2c2) 추가 (SIM100 동일)
+2026-07-07 | v0.31
+	- Mi_Main_SIC100.c: Analog 실패 마커 소비측을 새 규약(Data=0)으로 정합화
+	  · UpdateMeasure 재측정 트리거: pSampling->Analog.Type == NULL → .Data == 0
+	    (Measurement_Analog v0.2에서 실패 시에도 Type = TypeOfSensor 유지하므로 Type 검사 dead)
+	  · MiMain_DataIsError mV/mA 케이스: Data==0 배제 가드 추가
+	    (실패 마커를 -34000mV로 오인해 다음 정상값과 큰 오차로 판정 → 불필요한 재측정 반복 방지)
+	- Mi_Main_SIC100.c: MiMain_UpdateStatus 60초 가드 즉시 반환 경로 추가
+	  · Measurement_Supply 재실행 창(60초) 안쪽이면 else { result = RESULT_OK; } 로
+	    이전 캐시된 MiIoT_Status(SoftwareVersion/StatusBits/SystemSupply/TroubleCode)를
+	    그대로 DataPacket에 packing 후 즉시 OK 반환 → 상위 시퀀스가 STEP 전진 가능
+	  · 기존 흐름은 60초 가드 실패 시 result가 RESULT_RUN으로 유지되어 status 시퀀스 stall
 */

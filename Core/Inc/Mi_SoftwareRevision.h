@@ -10,7 +10,7 @@
 
 #include "Mi_Main.h"
 
-#define MI_SW_REVISION				1.11
+#define MI_SW_REVISION				1.12
 
 /* History
 
@@ -190,6 +190,28 @@
 	    case 4 wake 완료 시 default 경유 리셋
 	  · 5ms idle 유예 + SleepMode=1 설정 + step 전진의 원자적 결합 유지
 	    (유예 구간 = period/sensor/status가 busy 비트를 선점하는 시간)
+2026-07-07 | HW 2.4 | FW 1.11 (continued)
+	- Mi_IoT_SIC100 v0.11: MiIoT_IsSensorData 인정 페이로드에 IoTDataType_DataArray_Type2 추가
+	  · SIC100은 FW 0.96부터 fPort 101 통합 페이로드(DataArray_Type2) 사용
+	  · NAND 저장 관문(MiStorage_WriteIoTData)이 현행 페이로드를 인정하도록 (잠재 지뢰 제거)
+	  · 이력 위치 이동: 공유 Mi_IoT.h → 본 파일 (공유 헤더에 제품 전용 이력 미기재 규약)
+2026-07-08 | HW 2.4 | FW 1.12
+	- Mi_Measurement v0.2 (Mi_Measurement.c 잔여 OOB 수정):
+	  · Measurement_RecieveCallback_ArrayDual/ArraySingle 경계 off-by-one (111, 150행):
+	    (ReceivedId - SensorStartId) <= MIIOT_ARRAYSENSOR_MAX_COUNT → < 로 변경
+	    (MAX_COUNT=30, 배열 [30] 유효 0~29 — <=는 인덱스 30 통과 시
+	     TiltArray.Dual[30].AxisX/Y 또는 Single[30].Axis 쓰기로 인접 필드
+	     CountOfArraySensor·Analog 영역 오염 유발)
+	  · Measurement_Scan case 4 조회 루프 OOB read 차단 (251행):
+	    종료 조건에 || IdIndex >= MEASUREMENT_NODE_MAXCOUNT 추가
+	    (실호출 Measurement_Scan(ch, 1, 255, ...) 시 IdIndex 250~254에서
+	     Measure_ScanIdList[IdIndex] 읽기가 배열 밖(250칸)으로 넘어가던 문제 해소)
+	- Mi_Main v0.3 → v0.31 (Mi_Main.h 매크로/History 3면 정합):
+	  · MI_MAIN_VERSION 0.3 → 0.31 (.c Version 0.31 · History v0.31과 일치)
+	  · MiMain_UpdateStatus 60초 가드 즉시 반환 경로 항목 추가:
+	    Measurement_Supply 재실행 창(60초) 안쪽이면 else { result = RESULT_OK; }로
+	    이전 캐시된 MiIoT_Status를 DataPacket에 packing 후 즉시 OK 반환 →
+	    상위 시퀀스가 STEP 전진 가능 (이전 RUN 유지로 stall되던 문제 해소)
 */
 
 #endif /* INC_MI_SOFTWAREREVISION_H_ */

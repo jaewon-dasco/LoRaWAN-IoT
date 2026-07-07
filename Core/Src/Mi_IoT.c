@@ -1,7 +1,7 @@
 /*
  * Mi_IoT.c
  *
- *  Version: 0.3 (2026-07-07)
+ *  Version: 0.4 (2026-07-07)
  */
 
 #include "Mi_Native.h"
@@ -404,9 +404,10 @@ oResult_t MiIoT_SamplingSensor()
 
 oResult_t MiIoT_UpdatePeriod()
 {
-	static uint8_t MiIoT_MeasurementStep = -1;
-	static uint8_t MeasurementStarted = 0;
-	static uint8_t MeasurementPeriodOk;
+	static uint8_t UpdatePeriodStep = -1;
+	static uint8_t UpdatePeriodStarted = 0;
+	static uint8_t UpdatedPeriod_IsOk;
+	static uint32_t UpdatePeriodTimer;
 	static IoT_DataPacket_t *pDataPacket;
 	static oResult_t MeasurementResult = RESULT_RUN;
 	uint32_t MeasurementSendDelay = 0;
@@ -414,51 +415,52 @@ oResult_t MiIoT_UpdatePeriod()
 
 	//Update measurement
 	if(!MiIoT_MeasurementCallback){
-		MiIoT_MeasurementStep = 0;
+		UpdatePeriodStep = 0;
 		MiIoT_ProcessState.SamplingPeriod = 0;
 		return RESULT_NULL;
 	}
 
-	switch(MiIoT_MeasurementStep)
+	switch(UpdatePeriodStep)
 	{
 		default:
-			MiIoT_MeasurementStep = 0; // @suppress("No break at end of case")
+			UpdatePeriodStep = 0; // @suppress("No break at end of case")
 		case 0:
 			MiIoT_ProcessState.SamplingPeriod = 0;
+			UpdatePeriodTimer = 0;
 			result = RESULT_DONE;
 
 			if(MiIoT_Parameter.Operating.OperatingMode == IoTOperatingMode_Operating){
-				if(!MiIoT_ProcessState.Pause && (MiLoRa_IsReachable || MeasurementStarted)){
-					MeasurementStarted = 1;
+				if(!MiIoT_ProcessState.Pause && (MiLoRa_IsReachable || UpdatePeriodStarted)){
+					UpdatePeriodStarted = 1;
 
-					if(MeasurementPeriodOk){
+					if(UpdatedPeriod_IsOk){
 						if(!MiIoT_IsSamplingTime()){
-							MeasurementPeriodOk = 0;
+							UpdatedPeriod_IsOk = 0;
 						}
 					}
 					else{
 						if(MiIoT_IsSamplingTime()){
 							result = RESULT_RUN;
-							MeasurementPeriodOk = 1;
-							MiIoT_MeasurementStep++;
+							UpdatedPeriod_IsOk = 1;
+							UpdatePeriodStep++;
 
 						}
 					}
 				}
 			}
 			else{
-				MeasurementStarted = 0;
+				UpdatePeriodStarted = 0;
 			}
 			break;
 		case 1:
-			if(!MiIoT_ProcessState.SleepMode && !MiIoT_ProcessState.SamplingSensor && !MiIoT_ProcessState.SamplingSupply){
+			if((UpdatePeriodTimer == 0 || oTMR_Elapsed(&UpdatePeriodTimer, 100, TICKBASE_SYSTICK)) && !MiIoT_ProcessState.SleepMode && !MiIoT_ProcessState.SamplingSensor && !MiIoT_ProcessState.SamplingSupply){
 				MiIoT_ProcessState.SamplingPeriod = 1;
-				MiIoT_MeasurementStep++;					
+				UpdatePeriodStep++;					
 			}
 			break;
 		case 2:
 			if((MeasurementResult = MiIoT_MeasurementCallback(&pDataPacket)) != RESULT_RUN){
-				MiIoT_MeasurementStep++;
+				UpdatePeriodStep++;
 			}
 			break;
 		case 3:
@@ -482,21 +484,24 @@ oResult_t MiIoT_UpdatePeriod()
 			{
 				case RESULT_DONE:
 					result = RESULT_DONE;
-					MiIoT_MeasurementStep = 0;
+					UpdatePeriodStep = 0;
 					break;
 				case RESULT_WAIT:
 					result = RESULT_WAIT;
-					MiIoT_MeasurementStep = 1;
+					MiIoT_ProcessState.SamplingPeriod = 0;
+					UpdatePeriodTimer = oTMR_GetTick(TICKBASE_SYSTICK);
+					UpdatePeriodStep = 1;
 					break;
 				case RESULT_OK:
 					result = RESULT_RUN;
-					MiIoT_MeasurementStep = 1;
+					UpdatePeriodStep = 1;
 					break;
 				default:
 					result = MeasurementResult;
-					MiIoT_MeasurementStep = 0;
+					UpdatePeriodStep = 0;
 					break;
 			}
+			break;
 	}
 
 	return result;
