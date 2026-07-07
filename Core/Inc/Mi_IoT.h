@@ -8,7 +8,7 @@
 #ifndef INC_MI_IOT_H_
 #define INC_MI_IOT_H_
 
-#define MI_IOT_VERSION		0.2
+#define MI_IOT_VERSION		0.3
 
 #include "ONE_Time.h"
 #include "ONE_Signal.h"
@@ -496,4 +496,11 @@ extern void MiIoT();
 	- IoTStatus_t 필드 정리: SoftwareVersion 추가, StatusBit → StatusBits 명명 통일
 	- MiIoT_StatusCallback typedef 변경: ResultCallbackHandler_t → IoTDataPacketCallbackHandler_t
 	  · UpdateStatus가 IoT_DataPacket_t 반환하도록 시그니처 확장
+2026-07-07 | v0.3
+	- MiIoT_Sleep 상태머신 정리:
+	  · default: SleepMode=0 클리어를 case 0에서 default로 이동 + fall-through 제거 (break)
+	  · case 4: wake 완료 시 step=0 직접 복귀 → step++(→default 경유 리셋)로 변경
+	    (SleepMode 클리어 지점을 default 한 곳으로 일원화)
+	  · case 0: 5ms idle 유예 + SleepMode=1 설정 + step 전진의 원자적 결합 유지
+	    (유예 구간은 period/sensor/status가 busy 비트를 선점하는 시간 — 설계 의도 주석 추가)
 */

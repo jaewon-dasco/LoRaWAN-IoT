@@ -1,7 +1,7 @@
 #ifndef INC_MI_MAIN_H_
 #define INC_MI_MAIN_H_
 
-#define MI_MAIN_VERSION		0.2
+#define MI_MAIN_VERSION		0.3
 
 #include "ONE_Math.h"
 #include "ONE_Signal.h"
@@ -85,4 +85,14 @@ extern void MiMain(void);
 	  · IoTDataStatus_t 페이로드 packing 로직 추가 (SoftwareVersion / StatusBits / SystemSupply / TroubleCode)
 	  · *ppPacket = &DataPacket 로 호출자에게 반환 (기존 ppPacket = ... 오타 수정)
 	- Mi_Main_SIC100.c: MiIoT_Status.UpdateTimestmap → UpdateSupplyTimestamp 필드명 정합화
+2026-07-07 | v0.3
+	- Mi_Main_SIC100.c: MiMain_UpdateMeasure 재작성 — SIM100 신형 패턴 적용
+	  · 시작 시 Measurement_Supply(20) + 저전압(3200mV 미만) 가드 → RESULT_FAULT
+	  · 채널별 확정 비트맵(ChDoneBits) 도입 — 실패 채널만 재측정, 전 채널 확정 시 emit
+	  · 재측정 대기 중 RESULT_WAIT 반환 (공통 Mi_IoT v0.2 계약)
+	  · MEASURE_UPDATE_RETRY_MAX(10) 전체 상한 + 채널별 RetryCount 도달 시 현재 값 수락
+	  · StableData 합성·자기 일관성 2회 검증 제거 (채널별 RetryCount cap으로 대체)
+	  · MiMain_IsError/GetMeasureStableData → MiMain_DataIsError(채널 단위)로 교체
+	- Mi_Main_SIC100.c: MiMain_UpdateSampling에 공급전압 선검사 + 저전압 가드 추가 (SIM100 동일)
+	- Mi_Main_SIC100.c: MiMain() case 1에 HAL_I2C_DeInit(&hi2c2) 추가 (SIM100 동일)
 */

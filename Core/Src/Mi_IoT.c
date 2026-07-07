@@ -1,7 +1,7 @@
 /*
  * Mi_IoT.c
  *
- *  Version: 0.2 (2026-06-29)
+ *  Version: 0.3 (2026-07-07)
  */
 
 #include "Mi_Native.h"
@@ -588,12 +588,14 @@ void MiIoT_Sleep()
 		{
 			default:
 				MiIoT_SleepStep = 0;
-				SleepTimer = oTMR_GetTick(TICKBASE_SYSTICK);
-				/* no break */
-			case 0:
 				MiIoT_ProcessState.SleepMode = 0;
-
+				SleepTimer = oTMR_GetTick(TICKBASE_SYSTICK);
+				break;
+			case 0:
 				if(MiIoT_ProcessState.IsBusy == 0 && MiIoT_IsPowerSaveMode && oTMR_GetTick(TICKBASE_SYSTICK) > 3000){
+					/* 5ms idle 유예 — 이 안에 period/sensor/status가 busy 비트를 선점할 수 있다.
+					 * 유예 통과 시 SleepMode=1 설정과 step 전진이 반드시 한 몸으로 일어나야
+					 * 태스크 가드(!SleepMode)가 sleep 시퀀스 전 구간을 막는다. */
 					if(oTMR_Elapsed(&SleepTimer, 5, TICKBASE_SYSTICK)){
 						MiIoT_ProcessState.SleepMode = 1;
 						MiIoT_LED = 0;
@@ -634,10 +636,10 @@ void MiIoT_Sleep()
 				break;
 			case 4:
 				if(MiIoT_SleepCallback == NULL){
-					MiIoT_SleepStep = 0;
+					MiIoT_SleepStep++;
 				}
 				else if(MiIoT_SleepCallback() == RESULT_OK){
-					MiIoT_SleepStep = 0;
+					MiIoT_SleepStep++;
 				}
 				break;
 		}

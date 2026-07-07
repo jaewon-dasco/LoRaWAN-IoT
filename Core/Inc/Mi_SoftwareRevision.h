@@ -10,7 +10,7 @@
 
 #include "Mi_Main.h"
 
-#define MI_SW_REVISION				1.1
+#define MI_SW_REVISION				1.11
 
 /* History
 
@@ -176,6 +176,15 @@
 	- 인터록 정합성 검증 완료:
 	  · 3자 상호배제(SamplingSensor/UpdatePeriod/UpdateStatus) + Sleep 자동 대기
 	  · IsBusy union bitfield로 race 없이 통합 검사
+2026-07-07 | HW 2.4 | FW 1.11
+	- Mi_Main v0.2 → v0.3 (Mi_Main_SIC100.c 재작성 — SIM100 신형 패턴):
+	  · MiMain_UpdateMeasure: 공급전압 선검사(저전압 RESULT_FAULT) + ChDoneBits 채널별 재측정
+	    + RESULT_WAIT 대기 + MEASURE_UPDATE_RETRY_MAX(10) 상한 구조로 교체
+	  · StableData 합성·자기 일관성 2회 검증 제거 → 채널별 RetryCount cap으로 대체
+	  · MiMain_IsError/GetMeasureStableData → MiMain_DataIsError(채널 단위, CH1=Tilt/CH2=Analog)
+	  · CH2 Analog 측정 실패 마커(Analog.Type==NULL) 감지 시 해당 채널 재측정
+	  · MiMain_UpdateSampling: 공급전압 선검사 + 저전압 가드 추가 (SensorSamplingProgress 유지)
+	  · MiMain(): Init 단계 HAL_I2C_DeInit(&hi2c2) 추가
 */
 
 #endif /* INC_MI_SOFTWAREREVISION_H_ */
