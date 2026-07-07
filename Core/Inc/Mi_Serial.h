@@ -8,7 +8,7 @@
 #ifndef INC_MI_SERIAL_H_
 #define INC_MI_SERIAL_H_
 
-#define MI_SERIAL_VERSION		0.1
+#define MI_SERIAL_VERSION		0.11
 
 #include "Mi_IoT.h"
 #include "Mi_Main.h"
@@ -23,7 +23,7 @@ extern oSerialHandler_t MiSerial_Handler;
 
 extern uint8_t MiSerial_SensorSamplingProgress;
 extern uint8_t MiSerial_StopSensorCmd;
-extern uint8_t MiSerial_UpdateSensorCmd;
+extern uint8_t MiSerial_SamplingSensorCmd;
 extern uint8_t MiSerial_SamplingADCsTrig;
 
 extern void MiSerial_Process();
@@ -41,4 +41,8 @@ extern void MiSerial(UART_HandleTypeDef *pUART);
 
 2026-06-26 | v0.1
 	- baseline (Mi_Serial.h)
+2026-07-07 | v0.11
+	- MiSerial_UpdateSensorCmd → MiSerial_SamplingSensorCmd 명명 정합화
+	  · MiIoT_SamplingSensor 시퀀스와 명칭 일치 (Get/SensorData 트리거 플래그)
+	  · Mi_Serial.h extern 선언 + Mi_Serial.c 정의/사용처 2곳 갱신
 */

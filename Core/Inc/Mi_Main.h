@@ -1,7 +1,7 @@
 #ifndef INC_MI_MAIN_H_
 #define INC_MI_MAIN_H_
 
-#define MI_MAIN_VERSION		0.1
+#define MI_MAIN_VERSION		0.2
 
 #include "ONE_Math.h"
 #include "ONE_Signal.h"
@@ -75,4 +75,14 @@ extern void MiMain(void);
 
 2026-06-26 | v0.1
 	- baseline (Mi_Main.h)
+2026-06-29 | v0.2
+	- Mi_Main_SIC100.c: MiMain_UpdateSampling 시퀀스 재작성
+	  · MiMain_UpdateMeasure와 동일 골격, 재측정(retry) 알고리즘만 제거
+	  · ChannelNo 순회 로직 제거 (Measurement_Sensor가 통합 처리)
+	  · 1회 측정 → emit → DONE 단순 흐름
+	- Mi_Main_SIC100.c: MiMain_UpdateStatus 시그니처 확장
+	  · oResult_t (void) → oResult_t (IoT_DataPacket_t **ppPacket)
+	  · IoTDataStatus_t 페이로드 packing 로직 추가 (SoftwareVersion / StatusBits / SystemSupply / TroubleCode)
+	  · *ppPacket = &DataPacket 로 호출자에게 반환 (기존 ppPacket = ... 오타 수정)
+	- Mi_Main_SIC100.c: MiIoT_Status.UpdateTimestmap → UpdateSupplyTimestamp 필드명 정합화
 */

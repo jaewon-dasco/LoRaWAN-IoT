@@ -10,7 +10,7 @@
 
 #include "Mi_Main.h"
 
-#define MI_SW_REVISION				0.99
+#define MI_SW_REVISION				1.1
 
 /* History
 
@@ -151,6 +151,31 @@
 	- MiSerial_Handler·MiSerial_RxBuffer 정의를 공통 Mi_Serial.c → 모델별 Mi_Serial_SIC100.c로 이동
 	  · 모델별 TX/RX 버퍼 구성 분리 (SIV100 패턴 통일)
 	  · pTxBuffer=NULL, MiSerial_TxBuffer 정의 주석 처리 (미사용)
+2026-07-03 | HW 2.4 | FW 1.0
+	- MiLoRa(pUART) NULL 가드 추가: pUART==NULL 시 즉시 return (SIA100_VB 동기화)
+2026-07-07 | HW 2.4 | FW 1.1
+	- Mi_IoT v0.1 → v0.2:
+	  · IoTProcessState_t 신규 도입 (bitfield union + uint32_t IsBusy 오버레이)
+	    필드: SamplingPeriod/SamplingSensor/SamplingSupply/BusyLora/BusyMemory/BusyGPIO/Pause (bit)
+	         + SleepMode (byte, union 외부)
+	    IsBusy==0 한 번으로 7-flag 통합 검사 → Sleep 진입 조건 단순화
+	  · 개별 전역 flag → ProcessState 필드로 통합
+	    MiIoT_IsRunIO / MiIoT_IsRunSamplingSensor / MiIoT_IsRunSamplingSupply 제거
+	    MiIoT_IsSleep / MiIoT_IsPause 제거 → ProcessState.SleepMode / .Pause
+	  · IoTStatus_t 정리: SoftwareVersion 추가, StatusBit → StatusBits 통일
+	  · IoTStatusBit_t typedef 순서 정정 (forward reference 해결)
+	  · MiIoT_StatusCallback 타입 변경: ResultCallbackHandler_t → IoTDataPacketCallbackHandler_t
+	    (UpdateStatus가 IoT_DataPacket_t 반환하도록 시그니처 확장)
+	- Mi_Main v0.1 → v0.2 (Mi_Main_SIC100.c):
+	  · MiMain_UpdateSampling 시퀀스 재작성 — UpdateMeasure 골격 + 재측정 알고리즘만 제거
+	    (ChannelNo 순회 제거, 1회 측정 → emit → DONE)
+	  · MiMain_UpdateStatus 시그니처 확장: (void) → (IoT_DataPacket_t **ppPacket)
+	    IoTDataStatus_t 페이로드 packing (SoftwareVersion/StatusBits/SystemSupply/TroubleCode)
+	    *ppPacket = &DataPacket 로 반환 (기존 ppPacket = ... 오타 수정)
+	  · MiIoT_Status.UpdateTimestmap → UpdateSupplyTimestamp 필드명 정합화
+	- 인터록 정합성 검증 완료:
+	  · 3자 상호배제(SamplingSensor/UpdatePeriod/UpdateStatus) + Sleep 자동 대기
+	  · IsBusy union bitfield로 race 없이 통합 검사
 */
 
 #endif /* INC_MI_SOFTWAREREVISION_H_ */

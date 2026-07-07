@@ -1,7 +1,7 @@
-/*
+﻿/*
  * Mi_Main_SIC100.c
  *
- *  Version: 0.1 (2026-06-29)
+ *  Version: 0.2 (2026-06-29)
  */
 #include "ONE_CAN.h"
 #include "ONE_Signal.h"
@@ -496,120 +496,116 @@ oResult_t MiMain_UpdateMeasure(IoT_DataPacket_t **ppPacket)
 oResult_t MiMain_UpdateSampling(IoT_DataPacket_t **ppPacket)
 {
 	static uint8_t UpdateSamplingStep = 0;
-	static uint8_t ChannelNo = 0;
-	static uint8_t SampliingIndex = 0;
-	static uint8_t SampledActiveCount = 0;	/* 진행률 — 측정 시도된 활성 채널 수 */
-	static uint8_t TotalActiveChannels = 0;	/* 진행률 분모 — 활성 채널 총 개수 */
-	static IoT_DataPacket_t SmaplingData[MEASUREMENT_CHANNEL_MAXCOUNT];
+	static IoT_DataPacket_t SmaplingData;
+	static uint8_t HasActiveChannel = 0;
+	uint32_t i;
 	oResult_t result = RESULT_RUN;
-	IoTChannelConfig_t *pConfig;
-
-	if(ChannelNo < MEASUREMENT_CHANNEL_MAXCOUNT){
-		pConfig = &MiIoT_Parameter.ChannelConfig[ChannelNo];
-	}
 
 	switch(UpdateSamplingStep)
 	{
 		default:
 			UpdateSamplingStep = 0; // @suppress("No break at end of case")
 		case 0:
-			memset(SmaplingData, 0, sizeof(SmaplingData));
-
-			ChannelNo = 0;
-			SampliingIndex = 0;
-			SampledActiveCount = 0;
+			oSerial_Log("UpdateSampling", "start\r\n");
+			memset(&SmaplingData, 0, sizeof(SmaplingData));
 			MiSerial_SensorSamplingProgress = 0;
 
-			TotalActiveChannels = 0;
-			for(uint8_t k=0; k<MEASUREMENT_CHANNEL_MAXCOUNT; k++){
-				if(MiIoT_Parameter.ChannelConfig[k].TypeOfSensor != IoTSensorType_NULL){
-					TotalActiveChannels++;
+			/* 활성 채널 스캔 — 하나라도 있으면 측정 진행 (재측정 없음) */
+			HasActiveChannel = 0;
+			for(i=0; i<MEASUREMENT_CHANNEL_MAXCOUNT; i++){
+				IoTChannelConfig_t *pCfg = &MiIoT_Parameter.ChannelConfig[i];
+				IoTSensorType_t t = pCfg->TypeOfSensor;
+
+				if((t == IoTSensorType_ArrayDualTilt || t == IoTSensorType_ArraySingleTilt) && pCfg->Properties.Array.CountOfSensor > 0){
+					HasActiveChannel = 1;
+				}
+				else if(t == IoTSensorType_mV || t == IoTSensorType_mA){
+					HasActiveChannel = 1;
 				}
 			}
-
 			UpdateSamplingStep++; // @suppress("No break at end of case")
-			oSerial_Log("UpdateSampling", "start\r\n");
 		case 1:
-			MiSerial_SensorSamplingProgress = (TotalActiveChannels > 0)
-				? MATH_LIMIT((uint8_t)((float)SampledActiveCount/(float)TotalActiveChannels*99), 0, 99)
-				: 99;
-
-			if(MiSerial_UpdateSensorCmd && MiSerial_StopSensorCmd){
+			if(!HasActiveChannel){
 				MiSerial_SensorSamplingProgress = 100;
 				result = RESULT_DONE;
-			}
-			else if(ChannelNo >= MEASUREMENT_CHANNEL_MAXCOUNT){
-				MiSerial_SensorSamplingProgress = 100;
-				result = RESULT_DONE;
-			}
-			else if(((pConfig->TypeOfSensor == IoTSensorType_ArrayDualTilt || pConfig->TypeOfSensor == IoTSensorType_ArraySingleTilt) && pConfig->Properties.Array.CountOfSensor > 0) ||
-			        pConfig->TypeOfSensor == IoTSensorType_mV || pConfig->TypeOfSensor == IoTSensorType_mA){
-
-				SmaplingData[ChannelNo].DLC = 0;
-				SmaplingData[ChannelNo].TypeOfData = IoTDataType_NULL;
-				SampledActiveCount++;
-				UpdateSamplingStep++;
-				oSerial_Log("UpdateSampling", "data sampling | %s\r\n", MiIoT_SensorTypeToString(pConfig->TypeOfSensor));
 			}
 			else{
-				UpdateSamplingStep = 3;
+				SmaplingData.DLC = 0;
+				SmaplingData.TypeOfData = IoTDataType_NULL;
+				UpdateSamplingStep++;
 			}
 			break;
 		case 2:
-			// Measurement_Sensor가 각 채널의 통합 측정값 단일 패킷 반환 — ChannelNo==0 시점만 호출
-			if(ChannelNo > 0){
-				UpdateSamplingStep = 3;
-				break;
-			}
-
-			switch(Measurement_Sensor(&SmaplingData[SampliingIndex]))
+			oSerial_Log("UpdateSampling", "data sampling\r\n");
+			UpdateSamplingStep++; // @suppress("No break at end of case")
+		case 3:
+			switch(Measurement_Sensor(&SmaplingData))
 			{
 				case RESULT_OK:
-					SampliingIndex++;
-					UpdateSamplingStep = 3;
+					*ppPacket = &SmaplingData;
+					UpdateSamplingStep++;
 					break;
 				case RESULT_ERROR:
-					UpdateSamplingStep = 3;
-					oSerial_Log("UpdateSampling", "sampling error | %s\r\n", MiIoT_SensorTypeToString(pConfig->TypeOfSensor));
+					UpdateSamplingStep = 5;	/* 에러 시 emit 없이 완료로 진행 */
+					oSerial_Log("UpdateSampling", "sampling error\r\n");
 					break;
 				default:
 					break;
 			}
 			break;
-		case 3:
-			if(ChannelNo+1 == MEASUREMENT_CHANNEL_MAXCOUNT){
-				*ppPacket = &SmaplingData[0];
-				result = RESULT_OK;
-			}
-
-			UpdateSamplingStep = 1;
-			ChannelNo++;
+		case 4:
+			result = RESULT_OK;
+			UpdateSamplingStep = 5;
+			break;
+		case 5:
+			MiSerial_SensorSamplingProgress = 100;
+			result = RESULT_DONE;
 			break;
 	}
 
-	if(result != RESULT_RUN && result != RESULT_OK){
-		ChannelNo = 0;
-		UpdateSamplingStep = 0;
+	if(result != RESULT_RUN){
+		if(result == RESULT_DONE){
+			UpdateSamplingStep = 0;
+			oSerial_Log("UpdateSampling", "finish\r\n");
+		}
 	}
 
 	return result;
 }
 
-oResult_t MiMain_UpdateStatus()
+oResult_t MiMain_UpdateStatus(IoT_DataPacket_t **ppPacket)
 {
+	static IoT_DataPacket_t DataPacket;
 	oResult_t result = RESULT_RUN;
 
-	MiIoT_Status.SoftwareVersion = (uint16_t)(MI_SW_REVISION*100);
+	//최소 측정시간 60초로 설정
+	if(MiIoT_Status.SystemSupply == 0 || oTMR_Elapsed(&MiIoT_Status.UpdateSupplyTimestamp, SECOND_TO_MS(60), TICKBASE_SYSTICK)){
+		memset(&DataPacket, 0, sizeof(IoT_DataPacket_t));
 
-	if((result = Measurement_Supply(20)) == RESULT_OK){
-		MiIoT_Status.UpdateTimestmap = oTMR_GetTick(TICKBASE_SYSTICK);
-		MiIoT_Status.StatusBits.SystemSupplyVoltTooLow = GPIOs.ADC.SystemSupply < SYSTEM_SUPPLY_LOW_LIMIT;
-		MiIoT_Status.StatusBits.ClockSupplyVoltTooLow = GPIOs.ADC.InternalBAT < RTC_SUPPLY_LOW_LIMIT;
-		MiIoT_Status.StatusBits.Okay = (MiIoT_Status.StatusBits.Bits & 0xFFFFFFFE) == 0 ? 1 : 0;
-		MiIoT_Status.SystemSupply = GPIOs.ADC.SystemSupply;
+		MiIoT_Status.SoftwareVersion = (uint16_t)(MI_SW_REVISION*100);
 
-		oSerial_Log("IoTStatus", "SupplyVolt : %d | SWVersion : %d | StatusBit : %d\r\n", (int)MiIoT_Status.SystemSupply, (int)MiIoT_Status.SoftwareVersion, (int)MiIoT_Status.StatusBits.Bits);
+		if((result = Measurement_Supply(20)) == RESULT_OK){
+			MiIoT_Status.UpdateSupplyTimestamp = oTMR_GetTick(TICKBASE_SYSTICK);
+			MiIoT_Status.StatusBits.SystemSupplyVoltTooLow = GPIOs.ADC.SystemSupply < SYSTEM_SUPPLY_LOW_LIMIT;
+			MiIoT_Status.StatusBits.ClockSupplyVoltTooLow = GPIOs.ADC.InternalBAT < RTC_SUPPLY_LOW_LIMIT;
+			MiIoT_Status.StatusBits.Okay = (MiIoT_Status.StatusBits.Bits & 0xFFFFFFFE) == 0 ? 1 : 0;
+			MiIoT_Status.SystemSupply = GPIOs.ADC.SystemSupply;
+
+			oSerial_Log("IoTStatus", "SupplyVolt : %d | SWVersion : %d | StatusBit : %d\r\n", (int)MiIoT_Status.SystemSupply, (int)MiIoT_Status.SoftwareVersion, (int)MiIoT_Status.StatusBits.Bits);
+		}
 	}
+
+
+	DataPacket.TypeOfData  = IoTDataType_Status;
+	DataPacket.DLC  = sizeof(IoTDataStatus_t);
+	
+	IoTDataStatus_t *pData = (IoTDataStatus_t *)&DataPacket.Frame;
+	pData->SoftwareVersion = MiIoT_Status.SoftwareVersion;
+	pData->StatusBits = MiIoT_Status.StatusBits;
+	pData->SystemSupply = MiIoT_Status.SystemSupply;
+	pData->TroubleCode = MiIoT_Status.TroubleCode;
+
+	*ppPacket = &DataPacket;
 
 	return result;
 }

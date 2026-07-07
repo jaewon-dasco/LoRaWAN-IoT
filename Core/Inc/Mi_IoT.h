@@ -8,7 +8,7 @@
 #ifndef INC_MI_IOT_H_
 #define INC_MI_IOT_H_
 
-#define MI_IOT_VERSION		0.1
+#define MI_IOT_VERSION		0.2
 
 #include "ONE_Time.h"
 #include "ONE_Signal.h"
@@ -257,20 +257,42 @@ typedef union
 	uint32_t  		Bits;
 } IoTStatusBit_t;
 
-typedef struct IoTDataStatusTypeDef
+typedef struct
 {
+	uint16_t		SystemSupply;	//2
+	IoTStatusBit_t	StatusBits;		//4
+	uint16_t		TroubleCode;	//2
+	uint16_t		SoftwareVersion;//2
+} IoTDataStatus_t;
+
+typedef struct{
 	union{
 		struct{
-			uint16_t		SystemSupply;	//2
-			IoTStatusBit_t	StatusBits;		//4
-			uint16_t		TroubleCode;	//2
-			uint16_t		SoftwareVersion;//2
+			uint8_t			SamplingPeriod : 1;
+			uint8_t			SamplingSensor : 1;
+			uint8_t			SamplingSupply : 1;
+			uint8_t			BusyLora : 1;
+			uint8_t			BusyMemory : 1;
+			uint8_t			BusyGPIO : 1;
+			uint8_t			Pause : 1;
 		};
 
-		uint8_t  		Buffer[10];
+		uint32_t IsBusy;
 	};
 
-	uint32_t 			UpdateTimestmap;
+	uint8_t			SleepMode;
+} IoTProcessState_t;
+
+typedef struct IoTDataStatusTypeDef
+{
+	uint16_t			SoftwareVersion;//2
+	uint16_t			SystemSupply;
+	uint16_t			ClockSupply;
+	uint16_t			TroubleCode;
+	IoTStatusBit_t		StatusBits;
+
+	uint32_t 			UpdateSupplyTimestamp;
+
 	uint8_t 			IsNew;
 	uint8_t 			IsUpdateInformation;
 } IoTStatus_t;
@@ -418,7 +440,7 @@ typedef oResult_t (*IoTDataPacketCallbackHandler_t)(IoT_DataPacket_t **ppPacket)
 //****************************************************************************************************************************
 extern IoTDataPacketCallbackHandler_t MiIoT_MeasurementCallback;
 extern IoTDataPacketCallbackHandler_t MiIoT_SamplingCallback;
-extern ResultCallbackHandler_t MiIoT_StatusCallback;
+extern IoTDataPacketCallbackHandler_t MiIoT_StatusCallback;
 extern ResultCallbackHandler_t MiIoT_SleepCallback;
 extern ResultCallbackHandler_t MiIoT_IOControlCallback;
 extern VoidCallbackHandler_t MiIoT_GPIOInitCallback;
@@ -436,10 +458,7 @@ extern const IoTParameter_t MiIoT_DefaultParameter;
 extern IoTStatus_t MiIoT_Status;
 extern oDateAndTime_t MiIoT_DT;
 extern uint8_t MiIoT_IsBusy;
-extern uint8_t MiIoT_IsIORun;
 extern uint8_t MiIoT_IsPowerSaveMode;
-extern uint8_t MiIoT_IsPause;
-extern uint8_t MiIoT_IsSleep;
 extern uint8_t MiIoT_LED;
 
 
@@ -448,7 +467,6 @@ extern uint8_t MiIoT_LED;
 //****************************************************************************************************************************
 extern char* MiIoT_DataTypeToString(IoTDataType_t Type);
 extern char* MiIoT_SensorTypeToString(IoTSensorType_t Type);
-extern uint8_t MiIoT_GetChannelNumber(IoTChannelConfig_t *pConfig);
 extern oResult_t MiIoT_IsValidParameter(IoTParameter_t *pParameter);
 extern oResult_t MiIoT_IsSensorData(IoTProductType_t ProductCode, IoT_DataPacket_t *pPayload);
 extern IoT_MailboxItem_t* MiIoT_MailBox_GetLastItem(IoT_Mailbox_t *pMailBox);
@@ -459,7 +477,6 @@ extern IoT_MailboxItem_t* MiIoT_MailBox_GetItem(IoT_Mailbox_t* pMailBox);
 extern void MiIoT_MailBox_Remove(IoT_Mailbox_t* pMailBox, IoT_MailboxItem_t *pItem);
 extern IoT_MailboxItem_t* MiIoT_MailBox_Find(IoT_Mailbox_t *pMailBox, IoTDataType_t TypeOfData);
 extern oResult_t MiIoT_MailBox_IsExist(IoT_Mailbox_t *pMailBox, IoTDataType_t TypeOfData);
-extern oDateAndTime_t MiMain_GetSamplingTime();
 extern void MiIoT();
 
 #endif /* INC_MI_IOT_H_ */
@@ -468,4 +485,15 @@ extern void MiIoT();
 
 2026-06-26 | v0.1
 	- baseline (Mi_IoT.h)
+2026-06-29 | v0.2
+	- IoTProcessState_t 신규 도입 (bitfield union + uint32_t IsBusy 오버레이)
+	  · 필드: SamplingPeriod/SamplingSensor/SamplingSupply/BusyLora/BusyMemory/BusyGPIO/Pause (bit) + SleepMode(byte)
+	  · IsBusy==0 한 번으로 7-flag 통합 검사 (Sleep 진입 조건 단순화)
+	- 개별 전역 flag → ProcessState 필드로 통합
+	  · MiIoT_IsRunIO / MiIoT_IsRunSamplingSensor / MiIoT_IsRunSamplingSupply 제거
+	  · MiIoT_IsSleep / MiIoT_IsPause 제거 → ProcessState.SleepMode / .Pause
+	- IoTStatusBit_t typedef 순서 정정 (IoTDataStatus_t보다 앞으로 이동, forward reference 해결)
+	- IoTStatus_t 필드 정리: SoftwareVersion 추가, StatusBit → StatusBits 명명 통일
+	- MiIoT_StatusCallback typedef 변경: ResultCallbackHandler_t → IoTDataPacketCallbackHandler_t
+	  · UpdateStatus가 IoT_DataPacket_t 반환하도록 시그니처 확장
 */

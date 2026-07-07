@@ -1,7 +1,7 @@
 /*
  * Mi_LoRa.c
  *
- *  Version: 0.1 (2026-06-29)
+ *  Version: 0.11 (2026-07-03)
  */
 #include "Mi_IoT.h"
 #include "Mi_Serial.h"
@@ -12,7 +12,6 @@
 
 #define LORA_PAYLOAD_SIZE				51
 #define MILORA_JOIN_STABILIZE_MS		10000	// Join 후 라디오 link 안정화 대기 (첫 송신 손실 방지)
-/* 데이터 타입별 분할 상수와 MiLoRa_Encode 본문은 디바이스별 Mi_LoRa_<MODEL>.c 로 이동 */
 
 UART_HandleTypeDef *pLoRaUART = NULL;
 RAK3172_t *pLoRaDevice = &RAK3172Dev;
@@ -746,6 +745,10 @@ void MiLoRa_Control()
  * 실행 순서: 전원제어 → 시간동기화 → 메일전송 → RAK3172 AT 처리 */
 void MiLoRa(UART_HandleTypeDef *pUART)
 {
+	if(pUART == NULL){
+		return;
+	}
+
 	pLoRaUART = pUART;
 
 	MiLoRa_Control();					// LoRa 전원 Open/Close 제어

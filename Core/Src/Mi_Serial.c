@@ -1,7 +1,7 @@
 /*
  * Mi_Serial.c
  *
- *  Version: 0.1 (2026-06-29)
+ *  Version: 0.11 (2026-07-07)
  */
 #include "stdarg.h"
 #include "stdio.h"
@@ -16,7 +16,7 @@
 
 char StrBuffer[MISERIAL_RX_BUFFER_SIZE];
 
-uint8_t MiSerial_UpdateSensorCmd;
+uint8_t MiSerial_SamplingSensorCmd;
 uint8_t MiSerial_StopSensorCmd;
 uint8_t MiSerial_SamplingADCsTrig;
 uint8_t MiSerial_SensorSamplingProgress;
@@ -335,11 +335,11 @@ oResult_t MiSerial_Get(char *Message)
 
 	if(strstr(Message, "Get/SensorData") != NULL){
 		if(MiIoT_IsValidParameter(&MiIoT_Parameter) == RESULT_OK){
-			MiSerial_UpdateSensorCmd = 1;
+			MiSerial_SamplingSensorCmd = 1;
 			MiSerial_PrintResponse("Get/SensorData", "OK");
 		}
 		else{
-			MiSerial_UpdateSensorCmd = 0;
+			MiSerial_SamplingSensorCmd = 0;
 			MiSerial_PrintResponse("Get/SensorData", "InvalidParameterError");
 		}
 

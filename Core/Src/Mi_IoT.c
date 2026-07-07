@@ -1,7 +1,7 @@
 /*
  * Mi_IoT.c
  *
- *  Version: 0.1 (2026-06-29)
+ *  Version: 0.2 (2026-06-29)
  */
 
 #include "Mi_Native.h"
@@ -16,7 +16,7 @@ uint8_t MiIoT_IsPowerSaveMode = 1;
 
 IoTDataPacketCallbackHandler_t MiIoT_MeasurementCallback;
 IoTDataPacketCallbackHandler_t MiIoT_SamplingCallback;
-ResultCallbackHandler_t MiIoT_StatusCallback;
+IoTDataPacketCallbackHandler_t MiIoT_StatusCallback;
 ResultCallbackHandler_t MiIoT_SleepCallback;
 ResultCallbackHandler_t MiIoT_IOControlCallback;
 VoidCallbackHandler_t MiIoT_GPIOInitCallback;
@@ -26,13 +26,8 @@ oDateAndTime_t MiIoT_DT;
 oDateAndTime_t MiIoT_MeasurementDT;
 IoTParameter_t MiIoT_Parameter;
 IoTStatus_t MiIoT_Status;
-uint8_t MiIoT_IsIORun;
-uint8_t MiIoT_IsMeasurementRun;
-uint8_t MiIoT_IsBusy;
-uint8_t MiIoT_IsPause;
-uint8_t MiIoT_IsSleep;
+IoTProcessState_t MiIoT_ProcessState;
 uint8_t MiIoT_LED;
-
 oTrig_t MiIoT_USBConnectTrig = TRIGGER_INITIALIZER(1);
 oBlinker_t MiIoT_BlinkIdle  = BLINK_INITIALIZER(150, 0b0000000000000001, 300);
 oBlinker_t MiIoT_BlinkBusy  = BLINK_INITIALIZER(100, 0b1000000000000001, 100);
@@ -174,7 +169,7 @@ IoT_MailboxItem_t* MiIoT_MailBox_NewItem(IoT_Mailbox_t *pMailBox, IoT_DataPacket
 {
 	IoT_MailboxItem_t Mail = MIIOT_MAILBOX_INITIALIZER;
 
-	if(pMailBox == NULL){
+	if(pMailBox == NULL || pPacket == NULL || pPacket->DLC == 0 || pPacket->TypeOfData == IoTDataType_NULL){
 		return NULL;
 	}
 
@@ -183,12 +178,7 @@ IoT_MailboxItem_t* MiIoT_MailBox_NewItem(IoT_Mailbox_t *pMailBox, IoT_DataPacket
 	Mail.Payload.TypeOfData = pPacket->TypeOfData;
 	Mail.QoS = QoS;
 
-	if(Mail.Payload.DLC != 0){
-		memcpy(&Mail.Payload.Frame, &pPacket->Frame, pPacket->DLC);
-	}
-	else{
-		memset(&Mail.Payload.Frame, 0, sizeof(Mail.Payload.Frame));
-	}
+	memcpy(&Mail.Payload.Frame, &pPacket->Frame, pPacket->DLC);
 
 	return MiIoT_MailBox_AddItem(pMailBox, &Mail);
 }
@@ -305,7 +295,7 @@ uint8_t MiIoT_IsSamplingTime()
 	return TimeToSampling;
 }
 
-void MiIoT_LEDIndicator()
+void MiIoT_IOControl()
 {
 	//LED indicator
 	oBlink(&MiIoT_BlinkBusy);
@@ -314,20 +304,27 @@ void MiIoT_LEDIndicator()
 	if(MiIoT_Parameter.Operating.OperatingMode == IoTOperatingMode_Stop){
 		MiIoT_LED = 0;
 	}
-	else if(!MiIoT_IsSleep){
+	else if(!MiIoT_ProcessState.SleepMode){
 		if(pLoRaDevice->Status.IsBusy){
 			MiIoT_LED = MiIoT_BlinkBusy.Output;
 		}
-		else if(MiIoT_IsBusy || MiIoT_IsIORun){
+		else if(MiIoT_ProcessState.IsBusy != 0){
 			MiIoT_LED = MiIoT_BlinkIdle.Output;
 		}
 		else{
 			MiIoT_LED = 0;
 		}
 	}
+
+	if(MiIoT_IOControlCallback){
+		MiIoT_ProcessState.BusyGPIO = MiIoT_IOControlCallback() == RESULT_RUN || MiIoT_LED;
+	}
+	else{
+		MiIoT_ProcessState.BusyGPIO = 0;
+	}
 }
 
-oResult_t MiIoT_UpdateSampling()
+oResult_t MiIoT_SamplingSensor()
 {
 	static uint8_t SamplingtStep = -1;
 	static IoT_DataPacket_t *pDataPacket;
@@ -335,16 +332,20 @@ oResult_t MiIoT_UpdateSampling()
 	oResult_t result = RESULT_RUN;
 
 	if(!MiIoT_SamplingCallback){
+		SamplingtStep = 0;
+		MiIoT_ProcessState.SamplingSensor = 0;
 		return RESULT_NULL;
 	}
 
 	switch(SamplingtStep)
 	{
 		default:
-			MiSerial_UpdateSensorCmd = 0;
+			MiSerial_SamplingSensorCmd = 0;
 			SamplingtStep = 0; // @suppress("No break at end of case")
 		case 0:
-			if(MiSerial_UpdateSensorCmd){
+			MiIoT_ProcessState.SamplingSensor = 0;
+
+			if(MiSerial_SamplingSensorCmd){
 				SamplingtStep++;
 			}
 			else{
@@ -352,13 +353,13 @@ oResult_t MiIoT_UpdateSampling()
 			}
 			break;
 		case 1:
-			if(!MiIoT_IsMeasurementRun){
+			if(!MiIoT_ProcessState.SleepMode && !MiIoT_ProcessState.SamplingPeriod && !MiIoT_ProcessState.SamplingSupply){
 				SamplingtStep++;
 			}
 			break;
 		case 2:
 			if((SamplingResult=MiIoT_SamplingCallback(&pDataPacket)) != RESULT_RUN){
-				MiIoT_IsMeasurementRun = 0;
+				MiIoT_ProcessState.SamplingSensor = 1;
 				SamplingtStep++;
 			}
 			break;
@@ -376,7 +377,7 @@ oResult_t MiIoT_UpdateSampling()
 			{
 				case RESULT_DONE:
 					result = RESULT_DONE;
-					MiSerial_UpdateSensorCmd = 0;
+					MiSerial_SamplingSensorCmd = 0;
 					MiSerial_StopSensorCmd = 0;
 					SamplingtStep = 0;
 					break;
@@ -390,7 +391,7 @@ oResult_t MiIoT_UpdateSampling()
 					break;
 				default:
 					result = SamplingResult;
-					MiSerial_UpdateSensorCmd = 0;
+					MiSerial_SamplingSensorCmd = 0;
 					MiSerial_StopSensorCmd = 0;
 					SamplingtStep = 0;
 					break;
@@ -401,7 +402,7 @@ oResult_t MiIoT_UpdateSampling()
 	return result;
 }
 
-oResult_t MiIoT_UpdateMeasurement()
+oResult_t MiIoT_UpdatePeriod()
 {
 	static uint8_t MiIoT_MeasurementStep = -1;
 	static uint8_t MeasurementStarted = 0;
@@ -414,6 +415,7 @@ oResult_t MiIoT_UpdateMeasurement()
 	//Update measurement
 	if(!MiIoT_MeasurementCallback){
 		MiIoT_MeasurementStep = 0;
+		MiIoT_ProcessState.SamplingPeriod = 0;
 		return RESULT_NULL;
 	}
 
@@ -422,10 +424,11 @@ oResult_t MiIoT_UpdateMeasurement()
 		default:
 			MiIoT_MeasurementStep = 0; // @suppress("No break at end of case")
 		case 0:
+			MiIoT_ProcessState.SamplingPeriod = 0;
 			result = RESULT_DONE;
 
 			if(MiIoT_Parameter.Operating.OperatingMode == IoTOperatingMode_Operating){
-				if(!MiIoT_IsPause && (MiLoRa_IsReachable || MeasurementStarted)){
+				if(!MiIoT_ProcessState.Pause && (MiLoRa_IsReachable || MeasurementStarted)){
 					MeasurementStarted = 1;
 
 					if(MeasurementPeriodOk){
@@ -448,20 +451,23 @@ oResult_t MiIoT_UpdateMeasurement()
 			}
 			break;
 		case 1:
-			if(!MiIoT_IsMeasurementRun){
-				MiIoT_IsMeasurementRun = 1;
+			if(!MiIoT_ProcessState.SleepMode && !MiIoT_ProcessState.SamplingSensor && !MiIoT_ProcessState.SamplingSupply){
+				MiIoT_ProcessState.SamplingPeriod = 1;
 				MiIoT_MeasurementStep++;					
 			}
 			break;
 		case 2:
 			if((MeasurementResult = MiIoT_MeasurementCallback(&pDataPacket)) != RESULT_RUN){
-				MiIoT_IsMeasurementRun = 0;
 				MiIoT_MeasurementStep++;
 			}
 			break;
 		case 3:
 			if(MeasurementResult == RESULT_OK && pDataPacket != NULL && pDataPacket->TypeOfData != IoTDataType_NULL && pDataPacket->DLC){
 				MIIOT_DT_TO_IOTTIME(&MiIoT_MeasurementDT, &pDataPacket->Frame);
+
+				if(GPIOs.DI.UsbConnected){
+					MiSerial_PrintSensorData(pDataPacket);
+				}
 
 				//시리얼 번호 만큼 시간 옵셋을 줘서 lora data 겹치지 않게 한다.
 				if(MiIoT_Parameter.Information.SerialNo[6] > '0' && MiIoT_Parameter.Information.SerialNo[6] <= '9'){
@@ -491,7 +497,6 @@ oResult_t MiIoT_UpdateMeasurement()
 					MiIoT_MeasurementStep = 0;
 					break;
 			}
-			break;
 	}
 
 	return result;
@@ -500,9 +505,9 @@ oResult_t MiIoT_UpdateMeasurement()
 oResult_t MiIoT_UpdateStatus()
 {
 	static uint8_t MiIoT_StatusStep = -1;
+	static IoT_DataPacket_t *pDataPacket;
 	static uint32_t StatusUpdateTimer = 0;
 	static uint8_t StatusSendLoRa = 0;
-	IoT_DataPacket_t DataPacket;
 
 	//Update status
 	if(MiIoT_StatusCallback){
@@ -511,12 +516,13 @@ oResult_t MiIoT_UpdateStatus()
 			default:
 				MiIoT_StatusStep = 0; // @suppress("No break at end of case")
 			case 0:
+				MiIoT_ProcessState.SamplingSupply = 0;
 				StatusSendLoRa = 0;
 
 				if(MiIoT_USBConnectTrig.Output){
 					MiIoT_StatusStep++;
 				}
-				else if(MiIoT_Parameter.Operating.OperatingMode != IoTOperatingMode_Stop && !MiIoT_IsPause && !MiIoT_IsSleep && MiLoRa_IsReachable){
+				else if(MiIoT_Parameter.Operating.OperatingMode != IoTOperatingMode_Stop && !MiIoT_ProcessState.Pause && !MiIoT_ProcessState.SleepMode && MiLoRa_IsReachable){
 					StatusSendLoRa |= StatusUpdateTimer == 0;
 					StatusSendLoRa |= oTMR_Elapsed(&StatusUpdateTimer, MINUTE_TO_MS(MATH_MAX(MiIoT_Parameter.Operating.UpdateInterval, HOUR_TO_MINUTE(6))), TICKBASE_SYSTICK);
 
@@ -526,18 +532,26 @@ oResult_t MiIoT_UpdateStatus()
 				}
 				break;
 			case 1:
-				//최소 측정시간 60초로 설정
-				if(MiIoT_Status.SystemSupply == 0 || oTMR_Elapsed(&MiIoT_Status.UpdateTimestmap, SECOND_TO_MS(60), TICKBASE_SYSTICK)){
-					if(MiIoT_StatusCallback() != RESULT_RUN){
-						MiIoT_Status.UpdateTimestmap = oTMR_GetTick(TICKBASE_SYSTICK);
-						MiIoT_StatusStep++;
-					}
-				}
-				else{
+				if(!MiIoT_ProcessState.SleepMode && !MiIoT_ProcessState.SamplingSensor && !MiIoT_ProcessState.SamplingPeriod){
+					MiIoT_ProcessState.SamplingSupply = 1;
 					MiIoT_StatusStep++;
 				}
 				break;
 			case 2:
+				switch(MiIoT_StatusCallback(&pDataPacket))
+				{
+					case RESULT_RUN:
+						break;
+					case RESULT_OK:
+					case RESULT_DONE:
+						MiIoT_StatusStep++;
+						break;
+					default:
+						MiIoT_StatusStep = 0;
+						break;
+				}
+				break;
+			case 3:
 				//연결되어 있고 status 메시지가 이미 있지 않을때 전송
 				if(StatusSendLoRa && MiIoT_MailBox_IsExist(&MiIoT_LoRaMailBox, IoTDataType_Status) != RESULT_OK){
 					MiIoT_StatusStep++;
@@ -546,12 +560,8 @@ oResult_t MiIoT_UpdateStatus()
 					MiIoT_StatusStep = 0;
 				}
 				break;
-			case 3:
-				DataPacket.TypeOfData  = IoTDataType_Status;
-				DataPacket.DLC  = sizeof(MiIoT_Status.Buffer);
-				memcpy(&DataPacket.Frame, &MiIoT_Status.Buffer, DataPacket.DLC);
-
-				if(MiIoT_MailBox_NewItem(&MiIoT_LoRaMailBox, &DataPacket, 1, 0) != NULL){
+			case 4:
+				if(MiIoT_MailBox_NewItem(&MiIoT_LoRaMailBox, pDataPacket, 1, 0) != NULL){
 					oSerial_Log("MiIoT", "Status set mailbox\r\n");
 					StatusUpdateTimer = oTMR_GetTick(TICKBASE_SYSTICK);
 					MiIoT_StatusStep++;
@@ -561,6 +571,7 @@ oResult_t MiIoT_UpdateStatus()
 	}
 	else{
 		MiIoT_StatusStep = 0;
+		MiIoT_ProcessState.SamplingSupply = 0;
 	}
 
 	return MiIoT_StatusStep != 0 ? RESULT_RUN : RESULT_DONE;
@@ -580,11 +591,11 @@ void MiIoT_Sleep()
 				SleepTimer = oTMR_GetTick(TICKBASE_SYSTICK);
 				/* no break */
 			case 0:
-				MiIoT_IsSleep = 0;
+				MiIoT_ProcessState.SleepMode = 0;
 
-				if(!MiIoT_IsIORun && !MiIoT_IsBusy && MiIoT_IsPowerSaveMode && !MiIoT_IsPause && oTMR_GetTick(TICKBASE_SYSTICK) > 3000){
+				if(MiIoT_ProcessState.IsBusy == 0 && MiIoT_IsPowerSaveMode && oTMR_GetTick(TICKBASE_SYSTICK) > 3000){
 					if(oTMR_Elapsed(&SleepTimer, 5, TICKBASE_SYSTICK)){
-						MiIoT_IsSleep = 1;
+						MiIoT_ProcessState.SleepMode = 1;
 						MiIoT_LED = 0;
 						SleepTimer = oTMR_GetTick(TICKBASE_SYSTICK);
 						MiIoT_SleepStep++;
@@ -640,26 +651,15 @@ void MiIoT(UART_HandleTypeDef *pLoRaUART)
 
 	MiLoRa(pLoRaUART);
 
-	MiIoT_IsBusy = MiStorage_IsBusy || MiLoRa_IsBusy;	// LoRa/Storage 작업 진행 중 sleep 차단 (Storage_IsBusy가 NANDEnable 반영하므로 IsOpen 중복 제거)
+	MiIoT_ProcessState.BusyLora = MiLoRa_IsBusy;
+	MiIoT_ProcessState.BusyMemory = MiStorage_IsBusy;
 
-	if(MiIoT_UpdateMeasurement() == RESULT_RUN){
-		MiIoT_IsBusy = 1;
-	}
+	MiIoT_UpdatePeriod();
+	MiIoT_SamplingSensor();
+	MiIoT_UpdateStatus();
 
-	if (MiIoT_UpdateSampling() == RESULT_RUN){
-		MiIoT_IsBusy = 1;
-	}
-
-	if(MiIoT_UpdateStatus() == RESULT_RUN){
-		MiIoT_IsBusy = 1;
-	}
-
-	if(MiIoT_IOControlCallback){
-		MiIoT_IsIORun = MiIoT_IOControlCallback() == RESULT_RUN;
-	}
-
+	MiIoT_IOControl();
 	MiIoT_Sleep();
-	MiIoT_LEDIndicator();
 
-	MiIoT_IsPause = 0;
+	MiIoT_ProcessState.Pause = 0;
 }
