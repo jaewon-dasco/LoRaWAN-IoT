@@ -1,7 +1,7 @@
 /*
  * Mi_IoT.c
  *
- *  Version: 0.4 (2026-07-07)
+ *  Version: 0.5 (2026-07-08)
  */
 
 #include "Mi_Native.h"
@@ -418,6 +418,12 @@ oResult_t MiIoT_UpdatePeriod()
 		UpdatePeriodStep = 0;
 		MiIoT_ProcessState.SamplingPeriod = 0;
 		return RESULT_NULL;
+	}
+
+	/* 주기 측정 세션 중 시리얼 샘플링 명령 무시 — Measurement_Sensor 조기종료(미완성 패킷) 방지 */
+	if(UpdatePeriodStep > 0){
+		MiSerial_SamplingSensorCmd = 0;
+		MiSerial_StopSensorCmd = 0;
 	}
 
 	switch(UpdatePeriodStep)
