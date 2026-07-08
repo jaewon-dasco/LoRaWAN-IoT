@@ -37,8 +37,7 @@ GPIOs_t Measure_SupplyVolt;
 NAU7802_t NAU7802;
 
 uint32_t Measure_ScanIdList[MEASUREMENT_NODE_MAXCOUNT];
-uint8_t Measure_Buffer[MIIOT_PAYLOAD_MAXSIZE];
-IoTDataSIC100_2C_t *pIoTData = (IoTDataSIC100_2C_t *)&Measure_Buffer;
+IoTDataSIC100_2C_t *pIoTData = NULL;
 uint8_t Measure_SequenceStep = 0;
 uint8_t Measure_CanErrorCount = 0;
 
@@ -307,7 +306,7 @@ oResult_t Measurement_ArraySensorDual(IoTChannelConfig_t *pConfig)
 	MaxIndex = MATH_MIN((uint8_t)MIIOT_ARRAYSENSOR_MAX_COUNT, pConfig->Properties.Array.CountOfSensor);
 	SensorStartId = pConfig->Properties.Array.SensorId;
 
-	if(oCAN_IsError(pVxD) == RESULT_ERROR || (Measure_SequenceStep > 0 && Measure_CanErrorCount >= MEASURE_CAN_ERROR_MAXCOUNT)){
+	if(pIoTData == NULL || oCAN_IsError(pVxD) == RESULT_ERROR || (Measure_SequenceStep > 0 && Measure_CanErrorCount >= MEASURE_CAN_ERROR_MAXCOUNT)){
 		result = RESULT_ERROR;
 		goto EXIT;
 	}
@@ -477,7 +476,7 @@ oResult_t Measurement_ArraySensorSingle(IoTChannelConfig_t *pConfig)
 	MaxIndex = MATH_MIN((uint8_t)MIIOT_ARRAYSENSOR_MAX_COUNT, pConfig->Properties.Array.CountOfSensor);
 	SensorStartId = pConfig->Properties.Array.SensorId;
 
-	if(oCAN_IsError(pVxD) == RESULT_ERROR || (Measure_SequenceStep > 0 && Measure_CanErrorCount >= MEASURE_CAN_ERROR_MAXCOUNT)){
+	if(pIoTData == NULL || oCAN_IsError(pVxD) == RESULT_ERROR || (Measure_SequenceStep > 0 && Measure_CanErrorCount >= MEASURE_CAN_ERROR_MAXCOUNT)){
 		result = RESULT_ERROR;
 		goto EXIT;
 	}
@@ -616,6 +615,11 @@ oResult_t Measurement_Analog(IoTChannelConfig_t *pConfig)
 	double FinalAnalog = 0;
 	oResult_t result = RESULT_RUN;
 
+	if(pIoTData == NULL){
+		result = RESULT_ERROR;
+		goto EXIT;
+	}
+
 	switch(Measure_SequenceStep)
 	{
 		case 0://Initialize NAU7802
@@ -690,6 +694,7 @@ oResult_t Measurement_Analog(IoTChannelConfig_t *pConfig)
 		result = RESULT_ERROR;
 	}
 
+EXIT:
 	if(result != RESULT_RUN){
 		/* 실패 마커 규약: 측정 실패해도 Type은 채널 설정으로 유지, Data는 0 (초기값) */
 		pIoTData->Analog.Type = pConfig->TypeOfSensor;
@@ -728,8 +733,7 @@ oResult_t Measurement_Sensor(IoT_DataPacket_t *pPacket)
 			MiIoT_Status.StatusBits.DisconnectedSensor = False;
 			MiIoT_Status.TroubleCode = 0;
 
-			memset(pIoTData, 0, sizeof(IoTDataSIC100_2C_t));
-
+			pIoTData = (IoTDataSIC100_2C_t *)(&pPacket->Frame);
 			pPacket->TypeOfData = IoTDataType_NULL;
 			pPacket->DLC = 0;
 			ChannelNo = 1;
@@ -747,7 +751,7 @@ oResult_t Measurement_Sensor(IoT_DataPacket_t *pPacket)
 			{
 				case IoTSensorType_ArrayDualTilt:
 				case IoTSensorType_ArraySingleTilt:
-					if(ChannelNo == 1){
+					if(ChannelNo == 1 && pIoTData->TiltArray.Type == IoTSensorType_NULL){
 						MeasurementSensorStep++; // 매칭 → PowerOn 단계로
 					}
 					else{
@@ -756,7 +760,7 @@ oResult_t Measurement_Sensor(IoT_DataPacket_t *pPacket)
 					break;
 				case IoTSensorType_mV:
 				case IoTSensorType_mA:
-					if(ChannelNo == 2){
+					if(ChannelNo == 2 && pIoTData->Analog.Type == IoTSensorType_NULL){
 						MeasurementSensorStep++;
 					}
 					else{
@@ -806,17 +810,17 @@ oResult_t Measurement_Sensor(IoT_DataPacket_t *pPacket)
 	}
 
 	if(result != RESULT_RUN){
-		MeasurementSensorStep = 0;
-		ChannelNo = 0;
-
 		Measurement_PowerOn(-1);
 
 		if(result == RESULT_OK){
 			pPacket->DLC = MIIOT_PAYLOAD_MAXSIZE;
 			pPacket->TypeOfData = IoTDataType_DataArray_Type2;
 			MIIOT_DT_TO_IOTTIME(&MiIoT_DT, &pPacket->Frame);
-			memcpy(&pPacket->Frame[0] + sizeof(IoTDateAndTime_t), (uint8_t *)pIoTData + sizeof(IoTDateAndTime_t), sizeof(IoTDataSIC100_2C_t) - sizeof(IoTDateAndTime_t));
 		}
+
+		MeasurementSensorStep = 0;
+		ChannelNo = 0;
+		pIoTData = NULL;
 	}
 
 	return result;

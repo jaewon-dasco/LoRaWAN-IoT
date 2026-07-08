@@ -10,7 +10,7 @@
 
 #include "Mi_Main.h"
 
-#define MI_SW_REVISION				1.12
+#define MI_SW_REVISION				1.13
 
 /* History
 
@@ -195,6 +195,29 @@
 	  · SIC100은 FW 0.96부터 fPort 101 통합 페이로드(DataArray_Type2) 사용
 	  · NAND 저장 관문(MiStorage_WriteIoTData)이 현행 페이로드를 인정하도록 (잠재 지뢰 제거)
 	  · 이력 위치 이동: 공유 Mi_IoT.h → 본 파일 (공유 헤더에 제품 전용 이력 미기재 규약)
+2026-07-08 | HW 2.4 | FW 1.13
+	- Mi_Main v0.31 → v0.4 (재측정 로직 Best 값 합성 복원):
+	  · MiMain_GetMeasureStableData(pReference, pBest, pSampling) 신규 —
+	    Reference(PastSampling) 대비 요소별로 Best와 Sampling 중 오차 작은 쪽 선택.
+	    재측정 사이에 Best 누적 개선. 요소 단위: Analog.Data / Dual[i].AxisX/Y / Single[i].Axis.
+	  · UpdateMeasure에 static BestSampling 도입, case 0에서 zero init.
+	  · case 2 흐름:
+	    - 첫 사이클(TotalRetryCount==0 or BestSampling.DLC==0): Best = SamplingData
+	    - 이후 사이클: Best = GetMeasureStableData(PastSampling, Best, SamplingData)
+	    - Best의 오차 검사(MiMain_DataIsError) 통과 → PastSampling = Best, *ppPacket = &BestSampling
+	    - 오차 초과 → SamplingData의 실패 채널 Type=NULL 세팅 (부분 재측정 트리거)
+	  · Best 합성 안전성:
+	    - StableData = *pBest 를 기본으로 시작 (Sampling 실패값이 Best 오염 못 함)
+	    - pS->Analog.Type == NULL: 해당 채널 Best 유지
+	    - pS->TiltArray.Type == NULL: CH1 Best 유지
+	    - 동률 오차 시 Best 유지 (`<` 사용, `<=` 대비 안정성 확보)
+	    - Time 필드: pS->Time (새 측정 시각 반영)
+	    - pBest->DLC == 0 방어 분기 (첫 진입 sampling 채택)
+	- Mi_Main_SIC100.c 주석 정합 정리:
+	  · GetMeasureStableData 함수 헤더에 Sub-func 실패 마커 규약(Type=유효+Data=0)과
+	    UpdateMeasure의 재측정 트리거(SamplingData.Type=NULL 세팅) 흐름 명시
+	  · pS->Type==NULL 분기 주석을 "재측정 트리거 안전망"으로 정정
+	- BOM 재삽입 방지: Mi_Main_SIC100.c 앞 3바이트 스트립 (IDE 저장 시 재삽입 관찰)
 2026-07-08 | HW 2.4 | FW 1.12
 	- Mi_Measurement v0.2 (Mi_Measurement.c 잔여 OOB 수정):
 	  · Measurement_RecieveCallback_ArrayDual/ArraySingle 경계 off-by-one (111, 150행):

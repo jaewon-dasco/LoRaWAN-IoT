@@ -1,7 +1,7 @@
 /*
  * Mi_Main_SIC100.c
  *
- *  Version: 0.31 (2026-07-07)
+ *  Version: 0.4 (2026-07-08)
  */
 #include "ONE_CAN.h"
 #include "ONE_Signal.h"
@@ -187,6 +187,116 @@ void MiMain_GPIOInit(void)
 	HAL_ADC_Init(&hadc1);
 }
 
+/* SIC100 통합 패킷(DataArray_Type2)의 안정값(best) 갱신 — Reference 대비 요소별로
+ * Best와 Sampling 중 오차 작은 쪽을 선택하여 새 Best 반환. Best는 재측정 사이에 누적 개선됨.
+ * 규약: Measurement_* sub-func은 실패해도 Type=유효값 유지 + Data=0 (실패 마커).
+ *      UpdateMeasure가 DataIsError 통과 후 SamplingData.Type=NULL로 재측정 트리거 세팅.
+ * 방어: pS->Type==NULL 분기는 UpdateMeasure의 트리거 세팅이 여기까지 흘러온 경우 대비.
+ * Reference 없거나 타입 다르면 sampling 채택 (config 변경 or 초기 진입). */
+IoT_DataPacket_t MiMain_GetMeasureStableData(IoT_DataPacket_t *pReference, IoT_DataPacket_t *pBest, IoT_DataPacket_t *pSampling)
+{
+	IoT_DataPacket_t StableData;
+	double errorBest;
+	double errorSampling;
+	uint32_t i;
+
+	/* Reference 없거나 타입 다름 → 오차 계산 불가 → sampling 전체 채택 */
+	if(pReference->DLC == 0 ||
+	   pReference->TypeOfData != pSampling->TypeOfData ||
+	   pReference->TypeOfData != IoTDataType_DataArray_Type2){
+		return *pSampling;
+	}
+
+	/* Best 없음 (첫 진입 방어) → sampling 채택 */
+	if(pBest->DLC == 0 || pBest->TypeOfData != IoTDataType_DataArray_Type2){
+		return *pSampling;
+	}
+
+	/* 시작점: Best 그대로 (Sampling 실패 채널이 Best 오염 못 하도록 기본은 Best 유지) */
+	StableData = *pBest;
+
+	IoTDataSIC100_2C_t *pStable = (IoTDataSIC100_2C_t *)&StableData.Frame;
+	IoTDataSIC100_2C_t *pRef    = (IoTDataSIC100_2C_t *)&pReference->Frame;
+	IoTDataSIC100_2C_t *pB      = (IoTDataSIC100_2C_t *)&pBest->Frame;
+	IoTDataSIC100_2C_t *pS      = (IoTDataSIC100_2C_t *)&pSampling->Frame;
+
+	/* Time — 새 측정 시각 (Sampling) */
+	pStable->Time = pS->Time;
+
+	/* ========== CH2 Analog ========== */
+	if(pS->Analog.Type != IoTSensorType_NULL){
+		if(pB->Analog.Type == IoTSensorType_NULL || pRef->Analog.Type != pS->Analog.Type){
+			/* Best 없거나 Reference와 타입 불일치 → sampling 채택 */
+			pStable->Analog = pS->Analog;
+		}
+		else if(pS->Analog.Type == IoTSensorType_mV || pS->Analog.Type == IoTSensorType_mA){
+			double dRef, dB, dS;
+			if(pS->Analog.Type == IoTSensorType_mV){
+				dRef = MIIOT_DATA_DECODE_mV(pRef->Analog.Data);
+				dB   = MIIOT_DATA_DECODE_mV(pB->Analog.Data);
+				dS   = MIIOT_DATA_DECODE_mV(pS->Analog.Data);
+			}
+			else{
+				dRef = MIIOT_DATA_DECODE_mA(pRef->Analog.Data);
+				dB   = MIIOT_DATA_DECODE_mA(pB->Analog.Data);
+				dS   = MIIOT_DATA_DECODE_mA(pS->Analog.Data);
+			}
+			errorBest     = dRef - dB;
+			errorSampling = dRef - dS;
+			/* 요소별 best 선택 — sampling이 더 가까울 때만 갱신 (동률은 Best 유지로 안정성 확보) */
+			if(MATH_ABS(errorSampling) < MATH_ABS(errorBest)){
+				pStable->Analog = pS->Analog;
+			}
+			/* else Best 유지 (이미 StableData=*pBest) */
+		}
+	}
+	/* pS->Analog.Type == NULL → Best 유지 (재측정 트리거로 NULL 유입된 경우 방어) */
+
+	/* ========== CH1 Tilt ========== */
+	if(pS->TiltArray.Type != IoTSensorType_NULL){
+		if(pB->TiltArray.Type == IoTSensorType_NULL || pRef->TiltArray.Type != pS->TiltArray.Type){
+			/* Best 없거나 Reference와 타입 불일치 → sampling 전체 채택 */
+			pStable->TiltArray         = pS->TiltArray;
+			pStable->CountOfArraySensor = pS->CountOfArraySensor;
+		}
+		else{
+			/* 메타 갱신 (Temperature/Count는 새 sampling 값) */
+			pStable->TiltArray.Type        = pS->TiltArray.Type;
+			pStable->TiltArray.Temperature = pS->TiltArray.Temperature;
+			pStable->CountOfArraySensor    = pS->CountOfArraySensor;
+
+			if(pS->TiltArray.Type == IoTSensorType_ArrayDualTilt){
+				for(i = 0; i < pS->CountOfArraySensor; i++){
+					errorBest     = MIIOT_DATA_DECODE_ANGLE(pRef->TiltArray.Dual[i].AxisX) - MIIOT_DATA_DECODE_ANGLE(pB->TiltArray.Dual[i].AxisX);
+					errorSampling = MIIOT_DATA_DECODE_ANGLE(pRef->TiltArray.Dual[i].AxisX) - MIIOT_DATA_DECODE_ANGLE(pS->TiltArray.Dual[i].AxisX);
+					if(MATH_ABS(errorSampling) < MATH_ABS(errorBest)){
+						pStable->TiltArray.Dual[i].AxisX = pS->TiltArray.Dual[i].AxisX;
+					}
+					/* else Best 유지 */
+
+					errorBest     = MIIOT_DATA_DECODE_ANGLE(pRef->TiltArray.Dual[i].AxisY) - MIIOT_DATA_DECODE_ANGLE(pB->TiltArray.Dual[i].AxisY);
+					errorSampling = MIIOT_DATA_DECODE_ANGLE(pRef->TiltArray.Dual[i].AxisY) - MIIOT_DATA_DECODE_ANGLE(pS->TiltArray.Dual[i].AxisY);
+					if(MATH_ABS(errorSampling) < MATH_ABS(errorBest)){
+						pStable->TiltArray.Dual[i].AxisY = pS->TiltArray.Dual[i].AxisY;
+					}
+				}
+			}
+			else if(pS->TiltArray.Type == IoTSensorType_ArraySingleTilt){
+				for(i = 0; i < pS->CountOfArraySensor; i++){
+					errorBest     = MIIOT_DATA_DECODE_ANGLE(pRef->TiltArray.Single[i].Axis) - MIIOT_DATA_DECODE_ANGLE(pB->TiltArray.Single[i].Axis);
+					errorSampling = MIIOT_DATA_DECODE_ANGLE(pRef->TiltArray.Single[i].Axis) - MIIOT_DATA_DECODE_ANGLE(pS->TiltArray.Single[i].Axis);
+					if(MATH_ABS(errorSampling) < MATH_ABS(errorBest)){
+						pStable->TiltArray.Single[i].Axis = pS->TiltArray.Single[i].Axis;
+					}
+				}
+			}
+		}
+	}
+	/* pS->TiltArray.Type == NULL → Best 유지 (재측정 트리거로 NULL 유입된 경우 방어) */
+
+	return StableData;
+}
+
 /* SIC100 통합 패킷(DataArray_Type2)의 채널별 오차 검증 — CH1=TiltArray, CH2=Analog.
  * ErrorTolerance==0 또는 RetryCount==0 채널은 검사 제외. Type 불일치(기준값 없음/설정 변경)는 비교 불가 → 수락.
  * 반환 1=오차 초과(재측정 필요), 0=허용. */
@@ -235,10 +345,6 @@ uint8_t MiMain_DataIsError(IoTDataSIC100_2C_t *pReference, IoTDataSIC100_2C_t *p
 			if(pReference->Analog.Type != pConfig->TypeOfSensor || pCompare->Analog.Type != pConfig->TypeOfSensor){
 				break;
 			}
-			/* 실패 마커(Data=0)는 비교 배제 — 정상값을 -34000mV로 오인해 불필요한 재측정 반복 방지 */
-			if(pReference->Analog.Data == 0 || pCompare->Analog.Data == 0){
-				break;
-			}
 			if(pConfig->TypeOfSensor == IoTSensorType_mV){
 				error = MIIOT_DATA_DECODE_mV(pReference->Analog.Data) - MIIOT_DATA_DECODE_mV(pCompare->Analog.Data);
 			}
@@ -259,6 +365,7 @@ oResult_t MiMain_UpdateMeasure(IoT_DataPacket_t **ppPacket)
 {
 	static uint8_t UpdateMeasureStep = 0;
 	static IoT_DataPacket_t SamplingData;
+	static IoT_DataPacket_t BestSampling;	/* 재측정 사이에 누적 개선되는 최선값 */
 	static IoT_DataPacket_t PastSampling;
 	static uint16_t ChDoneBits;	/* 채널별 확정 비트맵 — CH1=bit0, CH2=bit1 */
 	static uint8_t TotalRetryCount;
@@ -287,6 +394,7 @@ oResult_t MiMain_UpdateMeasure(IoT_DataPacket_t **ppPacket)
 				}
 				else{
 					memset(&SamplingData, 0, sizeof(SamplingData));
+					memset(&BestSampling, 0, sizeof(BestSampling));
 
 					/* 활성 채널 수 집계 (진단 로그용) */
 					uint8_t activeChannels = 0;
@@ -318,8 +426,16 @@ oResult_t MiMain_UpdateMeasure(IoT_DataPacket_t **ppPacket)
 			}
 			break;
 		case 2: {
-			IoTDataSIC100_2C_t *pSampling = (IoTDataSIC100_2C_t *)&SamplingData.Frame;
-			IoTDataSIC100_2C_t *pPast     = (IoTDataSIC100_2C_t *)&PastSampling.Frame;
+			/* Best 갱신 — 첫 사이클은 sampling 그대로, 이후엔 reference 대비 요소별 best 선택 */
+			if(TotalRetryCount == 0 || BestSampling.DLC == 0){
+				BestSampling = SamplingData;
+			}
+			else{
+				BestSampling = MiMain_GetMeasureStableData(&PastSampling, &BestSampling, &SamplingData);
+			}
+
+			IoTDataSIC100_2C_t *pBest = (IoTDataSIC100_2C_t *)&BestSampling.Frame;
+			IoTDataSIC100_2C_t *pPast = (IoTDataSIC100_2C_t *)&PastSampling.Frame;
 
 			ChDoneBits = 0xFFFF;	/* 매 평가마다 리셋 — 실패 채널만 비트 클리어 */
 
@@ -331,36 +447,43 @@ oResult_t MiMain_UpdateMeasure(IoT_DataPacket_t **ppPacket)
 						continue;
 					}
 
-					/* 채널별 RetryCount 도달 → 현재 값 그대로 수락 (스킵) */
+					/* 채널별 RetryCount 도달 → 현재 best 그대로 수락 (스킵) */
 					if(TotalRetryCount >= pConfig->RetryCount){
 						continue;
 					}
 
-					/* CH2 Analog 측정 실패 마커 (Data=0) → 재측정 요청
-					 * Type은 Measurement_Analog가 성공/실패 모두 pConfig->TypeOfSensor로 설정 (실패 마커 규약).
-					 * 실패 판별은 Data==0(초기값)으로 확인. */
-					if((pConfig->TypeOfSensor == IoTSensorType_mV || pConfig->TypeOfSensor == IoTSensorType_mA) &&
-					   pSampling->Analog.Data == 0){
+					/* 방어: Best의 Type==NULL은 GetMeasureStableData 규약상 도달 불가지만 안전망으로 유지 */
+					if((k == 0 && pBest->TiltArray.Type == IoTSensorType_NULL) ||
+					   (k == 1 && pBest->Analog.Type    == IoTSensorType_NULL)){
 						oMEM_SetBit(&ChDoneBits, k, 0);
-						oSerial_Log("UpdateMeasure", "CH%d measurement failed → retry", (int)(k+1));
+						oSerial_Log("UpdateMeasure", "CH%d Type=NULL → retry", (int)(k+1));
 						continue;
 					}
 
-					/* 이전 측정값과 오차 비교 (PastSampling 없으면 첫 사이클 → 무조건 수락) */
+					/* Best vs PastSampling 오차 비교 (PastSampling 없으면 첫 사이클 → 무조건 수락) */
 					if(PastSampling.DLC == 0){
 						continue;
 					}
 
-					if(MiMain_DataIsError(pPast, pSampling, (uint8_t)(k+1))){
+					if(MiMain_DataIsError(pPast, pBest, (uint8_t)(k+1))){
+						/* Best도 오차 초과 — 재측정 트리거 (SamplingData의 Type=NULL로 다음 사이클 채널 재측정 유도) */
+						IoTDataSIC100_2C_t *pSampling = (IoTDataSIC100_2C_t *)&SamplingData.Frame;
+						if(k == 0){
+							pSampling->TiltArray.Type = IoTSensorType_NULL;
+						}
+						else{
+							pSampling->Analog.Type = IoTSensorType_NULL;
+						}
+
 						oMEM_SetBit(&ChDoneBits, k, 0);
-						oSerial_Log("UpdateMeasure", "CH%d error → retry", (int)(k+1));
+						oSerial_Log("UpdateMeasure", "CH%d error → retry (best still out)", (int)(k+1));
 					}
 				}
 			}
 
 			if(ChDoneBits == 0xFFFF){
-				PastSampling = SamplingData;
-				*ppPacket = &SamplingData;
+				PastSampling = BestSampling;
+				*ppPacket = &BestSampling;
 				result = RESULT_OK;
 			}
 			else{

@@ -1,7 +1,7 @@
 #ifndef INC_MI_MAIN_H_
 #define INC_MI_MAIN_H_
 
-#define MI_MAIN_VERSION		0.31
+#define MI_MAIN_VERSION		0.4
 
 #include "ONE_Math.h"
 #include "ONE_Signal.h"
@@ -95,6 +95,26 @@ extern void MiMain(void);
 	  · MiMain_IsError/GetMeasureStableData → MiMain_DataIsError(채널 단위)로 교체
 	- Mi_Main_SIC100.c: MiMain_UpdateSampling에 공급전압 선검사 + 저전압 가드 추가 (SIM100 동일)
 	- Mi_Main_SIC100.c: MiMain() case 1에 HAL_I2C_DeInit(&hi2c2) 추가 (SIM100 동일)
+2026-07-08 | v0.4 (재검증 반영)
+	- MiMain_GetMeasureStableData 재작성 — Sampling 실패값이 Best 오염 방지:
+	  · 기본 반환값 base = *pBest (Sampling 실패 시 Best 이전값 유지 보장)
+	  · pS->Analog.Type == NULL → 해당 채널 Best 유지 (기존 로직은 pS 강제 덮어씀 → 회귀)
+	  · pS->TiltArray.Type == NULL → CH1 Best 유지
+	  · 동률 오차는 Best 유지로 통일 (`<`, 기존은 `<=`로 sampling 우선 → 안정성 저하)
+	  · Time 필드 소스: pRef → pS (새 측정 시각 반영, 기존은 오래된 Reference 시각)
+	  · CH1 memcpy → 구조체 대입(TiltArray = pS->TiltArray)으로 union 안전성 확보
+	  · pBest->DLC == 0 방어 분기 추가 (첫 진입 sampling 채택)
+2026-07-08 | v0.4
+	- Mi_Main_SIC100.c: 재측정 로직에 Best 값 합성 복원 + Type=NULL 실패 마커 규약 통합
+	  · MiMain_GetMeasureStableData(pReference, pBest, pSampling) 신규 — 요소별 best 선택
+	    Reference(PastSampling) 대비 Best와 Sampling 중 오차 작은 쪽을 요소 단위(Analog.Data,
+	    Dual[i].AxisX/Y, Single[i].Axis)로 선택하여 새 Best 반환. 재측정 사이 누적 개선.
+	  · MiMain_UpdateMeasure: static BestSampling 도입, case 0에서 zero init
+	  · case 2 흐름: 첫 사이클 Best=SamplingData → 이후 Best=GetMeasureStableData(Past, Best, New)
+	    → Best 오차 검사 → 통과 시 PastSampling=Best, *ppPacket=&BestSampling
+	    → 실패 시 SamplingData의 실패 채널 Type=NULL로 세팅 (다음 사이클 부분 재측정 유도)
+	  · Type=NULL 실패 마커 규약: sub-func 실패 or 오차 초과 판정 채널을 NULL로 표시
+	    → Measurement_Sensor case 1이 Type==NULL 채널만 재측정 (부분 재측정 지원)
 2026-07-07 | v0.31
 	- Mi_Main_SIC100.c: Analog 실패 마커 소비측을 새 규약(Data=0)으로 정합화
 	  · UpdateMeasure 재측정 트리거: pSampling->Analog.Type == NULL → .Data == 0

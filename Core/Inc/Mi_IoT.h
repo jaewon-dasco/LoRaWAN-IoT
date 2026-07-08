@@ -30,6 +30,7 @@
 #define MIIOT_SENSORDATA_SIZE_ANALOG			5
 #define MIIOT_SENSORDATA_SIZE_TEMP				2
 #define MIIOT_SENSORDATA_SIZE_DATAARRAY			6
+#define MIIOT_SENSORDATA_SIZE_VIBRATION			10
 
 #define MIIOT_IOTDATA_SIZE_TIME					6
 #define MIIOT_IOTDATA_SIZE_ARRAYDUALTILT(cnt)	(MIIOT_IOTDATA_SIZE_TIME + 1 + MIIOT_SENSORDATA_SIZE_TEMP + ((uint32_t)(cnt)*MIIOT_SENSORDATA_SIZE_TILT_DUAL)) 	 	// time(6) + channel(1) + temp(2) +  dualaxis(6)
@@ -38,6 +39,7 @@
 #define MIIOT_IOTDATA_SIZE_TILT					(MIIOT_IOTDATA_SIZE_TIME + MIIOT_SENSORDATA_SIZE_TEMP + MIIOT_SENSORDATA_SIZE_TILT_DUAL)							// time(6) + temp(2) + angle(6)
 #define MIIOT_IOTDATA_SIZE_TEMP					(MIIOT_IOTDATA_SIZE_TIME + MIIOT_SENSORDATA_SIZE_TEMP) 																// time(6) + temp(2)
 #define MIIOT_IOTDATA_SIZE_DATAARRAY(cnt)		(MIIOT_IOTDATA_SIZE_TIME + ((uint32_t)(cnt)*MIIOT_SENSORDATA_SIZE_DATAARRAY)) 										// time(6) + dataarray(6)
+#define MIIOT_IOTDATA_SIZE_VIBRATION(cnt)	(MIIOT_IOTDATA_SIZE_TIME + ((uint32_t)(cnt)*MIIOT_SENSORDATA_SIZE_VIBRATION))	// time(6) + vibration(10)
 
 #define MIIOT_PAYLOAD_TO_DUALARRAY_COUNT(dlc)	(dlc <= 0 ? 0 : (dlc-MIIOT_IOTDATA_SIZE_ARRAYDUALTILT(0)) / MIIOT_SENSORDATA_SIZE_TILT_DUAL)
 #define MIIOT_PAYLOAD_TO_SINGLEARRAY_COUNT(dlc)	(dlc <= 0 ? 0 : (dlc-MIIOT_IOTDATA_SIZE_ARRAYDUALTILT(0)) / MIIOT_SENSORDATA_SIZE_TILT_SINGLE)
@@ -46,6 +48,7 @@
 
 #define MIIOT_ARRAYSENSOR_MAX_COUNT				30
 #define MIIOT_VW_CH_MAX_COUNT					5
+#define MIIOT_VIBRATION_MAX_COUNT			10
 #define MIIOT_ANALOG_CH_MAX_COUNT				9
 #define MIIOT_DATA_ARRAY_MAX_COUNT				MIIOT_CHANNEL_MAXCOUNT
 
@@ -53,6 +56,7 @@
 #define MIIOT_DATA_ENCODE_ANGLE(x)				(uint32_t)((MATH_LIMIT((double)(x), -180.0, 180.0) + 180.0) / 0.001)
 #define MIIOT_DATA_ENCODE_TEMP(x)				(uint16_t)((MATH_LIMIT((double)(x), -40.0, 120.0) + 40.0) / 0.01)
 #define MIIOT_DATA_ENCODE_FREQUENCY(fq)			(uint32_t)((MATH_LIMIT((double)(fq), 0, 167772) / 0.01))
+#define MIIOT_DATA_ENCODE_mmPerSec(x)			(uint16_t)(MATH_LIMIT((double)(x), 0, 655.35) / 0.01)
 #define MIIOT_DATA_ENCODE_uV(uV)				(uint32_t)((MATH_LIMIT((double)(uV), -34000000, 34000000) + 34000000))
 #define MIIOT_DATA_ENCODE_mV(mV)				(uint32_t)((MATH_LIMIT((double)(mV), -34000, 34000) + 34000) / 0.001)
 #define MIIOT_DATA_ENCODE_mA(mA)				(uint32_t)((MATH_LIMIT((double)(mA), -34000, 34000) + 34000) / 0.001)
@@ -113,6 +117,7 @@ typedef enum{
 	IoTSensorType_ArrayDualTilt		 	= 8,
 	IoTSensorType_ArraySingleTilt		= 9,
 	IoTSensorType_Tilt					= 10,
+	IoTSensorType_Vibration				= 11,
 	IoTSensorType_Max		 			= 255,
 }IoTSensorType_t;
 
@@ -163,7 +168,6 @@ typedef struct
 	uint32_t			Axis		: 24;
 } IoTSensorTiltSingle_t; //3byte
 
-
 typedef struct
 {
 	IoTSensorTemp_t		Temperature;
@@ -175,6 +179,24 @@ typedef struct
 	IoTSensorType_t		Type;
 	uint8_t				Channel		: 8;
 } IoTSensorTiltArray_t;
+
+typedef struct
+{
+	uint16_t				PPV_X;		// mm/s × 100
+	uint16_t				PPV_Y;		// mm/s × 100
+	uint16_t				PPV_Z;		// mm/s × 100
+	uint16_t				PVS;		// mm/s × 100
+	uint16_t				Freq;		// Hz × 100 (PPV 최대 축 주파수)
+} IoTSensorVibrationPPV_t; //10byte
+
+typedef struct
+{
+	uint16_t				MTVV_X;		// 축별 MTVV (가속도 running-RMS 최댓값, mm/s² × 100)
+	uint16_t				MTVV_Y;		// 축별 MTVV
+	uint16_t				MTVV_Z;		// 축별 MTVV
+	uint16_t				MTVV;		// 대표값 (최대 축 or 벡터합)
+	uint16_t				Freq;		// Hz × 100 (MTVV 최대 축 주파수)
+} IoTSensorVibrationMTVV_t; //10byte
 
 ///***************************************************************************************************************************
 // IoT Data
@@ -235,13 +257,7 @@ typedef struct
 typedef struct
 {
 	IoTDateAndTime_t		Time;
-	uint16_t				PPV_X;		// mm/s × 100
-	uint16_t				PPV_Y;
-	uint16_t				PPV_Z;
-	uint16_t				PVS;		// mm/s × 100
-	uint16_t				Freq_X;		// Hz × 10
-	uint16_t				Freq_Y;
-	uint16_t				Freq_Z;
+	IoTSensorVibrationPPV_t	Data[MIIOT_VIBRATION_MAX_COUNT];
 } IoTDataVibration_t;
 
 typedef union
@@ -321,7 +337,7 @@ typedef struct{
 	char		Mode[7];
 	float		StartFreq;
 	float		EndFreq;
-}IoTChannelPropertiesVW_t;
+}IoTChannelPropertiesVibratingWire_t;
 
 typedef struct{
 	char		Mode[7]; //3K/10K/NTC/PTC
@@ -334,6 +350,10 @@ typedef struct{
 }IoTChannelPropertiesTilt_t;
 
 typedef struct{
+	float		Warnning;	// PPV 경고 임계값 (mm/s), 0이면 컴파일 기본값 사용
+}IoTChannelPropertiesVibration_t;
+
+typedef struct{
 	IoTSensorType_t		TypeOfSensor;
 	uint16_t 			WarmupTime; //ms
 	uint8_t 			SupplySource; //Power(12V) supply port (SIM100_6C=1~3 / SIC100_2C=1~2)
@@ -342,9 +362,10 @@ typedef struct{
 	float				ErrorTolerance;
 	union{
 		IoTChannelPropertiesArray_t 		Array;
-		IoTChannelPropertiesVW_t 			VibrationWire;
+		IoTChannelPropertiesVibratingWire_t 			VibrationWire;
 		IoTChannelPropertiesTilt_t 			Tilt;
 		IoTChannelPropertiesThermistor_t	Thermistor;
+		IoTChannelPropertiesVibration_t		Vibration;
 	}Properties;
 } IoTChannelConfig_t;
 
@@ -439,6 +460,7 @@ typedef oResult_t (*IoTDataPacketCallbackHandler_t)(IoT_DataPacket_t **ppPacket)
 // IoT Callback
 //****************************************************************************************************************************
 extern IoTDataPacketCallbackHandler_t MiIoT_MeasurementCallback;
+extern IoTProcessState_t MiIoT_ProcessState;
 extern IoTDataPacketCallbackHandler_t MiIoT_SamplingCallback;
 extern IoTDataPacketCallbackHandler_t MiIoT_StatusCallback;
 extern ResultCallbackHandler_t MiIoT_SleepCallback;
