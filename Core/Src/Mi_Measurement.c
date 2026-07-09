@@ -1,7 +1,7 @@
 /*
  * Mi_Measurement.c
  *
- *  Version: 0.2 (2026-07-07)
+ *  Version: 0.3 (2026-07-08)
  */
 
 #include "Mi_Native.h"
@@ -774,6 +774,10 @@ oResult_t Measurement_Sensor(IoT_DataPacket_t *pPacket)
 			break;
 		case 2: // PowerOn — 채널별 전원 인가
 			if(Measurement_PowerOn(pConfig->SupplySource) == RESULT_OK){
+				/* CH2 Analog 모드 선택 (mA=HIGH, mV=LOW) — case 3 warmup 200ms가 settling 커버 */
+				if(pConfig->TypeOfSensor == IoTSensorType_mA){
+					GPIOs.DO.CurrentModeEnable = 1;
+				}
 				Measure_Timer = oTMR_GetTick(TICKBASE_SYSTICK);
 				MeasurementSensorStep++;
 			}
@@ -818,6 +822,7 @@ oResult_t Measurement_Sensor(IoT_DataPacket_t *pPacket)
 			MIIOT_DT_TO_IOTTIME(&MiIoT_DT, &pPacket->Frame);
 		}
 
+		GPIOs.DO.CurrentModeEnable = 0;	/* mV/mA 전환은 상위(Measurement_Sensor case 2)에서 세팅 */
 		MeasurementSensorStep = 0;
 		ChannelNo = 0;
 		pIoTData = NULL;

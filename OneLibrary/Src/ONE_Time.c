@@ -1,14 +1,14 @@
 /*
  * ONE_Time.c
  *
- *  Version: 0.1 (2026-06-29)
+ *  Version: 0.3 (2026-07-08)
  */
 #include "ONE_Math.h"
 #include "ONE_Time.h"
 
-#define DT_USED_RTC
+#define DT_USED_RTC 	1
 
-uint32_t oDT_Tick;
+uint32_t oDT_UpdateTimestamp = 0;
 uint32_t oTMR_Tick_us;
 uint32_t oTMR_Tick_ms;
 oDateAndTime_t SysDataAndTime = {0,0,0,0,0,0};
@@ -125,15 +125,15 @@ void oTMR_SetTick(oTickBase_t TickBase, uint32_t Tick)
 	}
 }
 
-uint32_t oTMR_Interval(uint32_t Tick1, uint32_t Tick2)
+uint32_t oTMR_Interval(uint32_t TickBase, uint32_t TickSub)
 {
 	uint32_t result = 0;
 
-	if(Tick1 >= Tick2){
-		result = Tick1-Tick2;
+	if(TickBase >= TickSub){
+		result = TickBase-TickSub;
 	}
 	else{
-		result = (TMR_TICK_MAXVALUE-Tick2)+Tick1;
+		result = (TMR_TICK_MAXVALUE-TickSub)+TickBase;
 	}
 
 	return result;
@@ -232,34 +232,47 @@ uint32_t oTMR_RandRange(uint32_t *pSeed, uint32_t Min, uint32_t Max)
     }
 }
 
-oDateAndTime_t oDT_UpdateNow(void)
+void oDT_SetNow(oDateAndTime_t *pDT)
 {
-	if(!oTMR_Trigger(&oDT_Tick, 1000, 1, TICKBASE_SYSTICK)){
+	if(oDT_IsEmpty(pDT)){
+		return;
+	}
+
+#if defined(DT_USED_RTC) && defined(RTC_OUTPUT_DISABLE)
+	oRTC_SetDateAndTime(pDT);
+#else
+	SysDataAndTime = *pDT;
+	oDT_UpdateTimestamp = oTMR_GetTick(TICKBASE_SYSTICK);
+#endif
+}
+
+oDateAndTime_t oDT_GetNow(void)
+{
+	uint32_t NowTick = oTMR_GetTick(TICKBASE_SYSTICK);
+	uint32_t IntervalTick = oTMR_Interval(NowTick, oDT_UpdateTimestamp);
+
+	if(oDT_UpdateTimestamp != 0 && IntervalTick < 1000){
 		return SysDataAndTime;
 	}
 
-	#if defined(DT_USED_RTC) && defined(RTC_OUTPUT_DISABLE)
+#if DT_USED_RTC && defined(RTC_OUTPUT_DISABLE)
 	oRTC_GetDateAndTime(&SysDataAndTime);
-	#else
+#else
 	if(oDT_IsEmpty(&SysDataAndTime)){
 		#if defined(RTC_BACKUPFLAG)
 		oRTC_GetDateAndTime(&SysDataAndTime);
 		#endif
 	}
 	else{
-		oDT_AddSec(&SysDataAndTime, 1);
+		if(IntervalTick >= 1000){
+			oDT_AddSec(&SysDataAndTime, IntervalTick / 1000);
+		}
 	}
-	#endif
+#endif
+
+	oDT_UpdateTimestamp = NowTick - (IntervalTick % 1000);
 
 	return SysDataAndTime;
-}
-void oDT_Reset(oDateAndTime_t *pDT)
-{
-	if(pDT == NULL){
-		return;
-	}
-
-	*pDT = oDT_UpdateNow();
 }
 
 int8_t oDT_Compare(oDateAndTime_t *pBase, oDateAndTime_t *pTarget)
@@ -347,27 +360,6 @@ uint8_t oDT_IsTimeOver(oDateAndTime_t *pDT)
 	}
 
 	return oDT_Compare(pDT, &SysDataAndTime) >= 0 ? 1 : 0;
-}
-void oDT_SetNow(oDateAndTime_t *pDT)
-{
-	if(oDT_IsEmpty(pDT)){
-		return;
-	}
-
-#if defined(DT_USED_RTC) && defined(RTC_OUTPUT_DISABLE)
-	oRTC_SetDateAndTime(pDT);
-#else
-	SysDataAndTime = *pDT;
-#endif
-}
-
-void oDT_GetNow(oDateAndTime_t *pDT)
-{
-	if(pDT == NULL){
-		return;
-	}
-
-	*pDT = oDT_UpdateNow();
 }
 
 uint32_t oDT_Sub(oDateAndTime_t DT1, oDateAndTime_t DT2)
@@ -519,7 +511,7 @@ uint8_t oDT_ElapsedSec(oDateAndTime_t *pDT, uint32_t Interval)
 		return 0;
 	}
 	else if(oDT_IsEmpty(pDT)){
-		oDT_Reset(pDT);
+		*pDT = oDT_GetNow();
 		return 0;
 	}
 
@@ -545,7 +537,7 @@ uint8_t oDT_ElapsedDay(oDateAndTime_t *pDT, uint32_t Interval)
 		return 0;
 	}
 	else if(oDT_IsEmpty(pDT)){
-		oDT_Reset(pDT);
+		*pDT = oDT_GetNow();
 		return 0;
 	}
 

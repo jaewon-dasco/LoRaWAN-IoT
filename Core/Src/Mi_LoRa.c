@@ -1,7 +1,7 @@
 /*
  * Mi_LoRa.c
  *
- *  Version: 0.11 (2026-07-03)
+ *  Version: 0.13 (2026-07-08)
  */
 #include "Mi_IoT.h"
 #include "Mi_Serial.h"
@@ -140,17 +140,33 @@ oResult_t MiLoRa_SendMailbox(IoT_MailboxItem_t *pMail)
 	static uint8_t SendTryCount = 0;
 	static uint8_t SendBuffer[LORA_PAYLOAD_SIZE] = {0,};
 	static uint8_t SendBufferSize;
+	static IoT_MailboxItem_t *pLastMail = NULL;	// 처리 중인 메일 신원 (포인터 + Timestamp 쌍)
+	static uint32_t LastMailTimestamp = 0;
 	oResult_t result = RESULT_RUN;
 
-	// 유효하지 않은 메일 → 즉시 RESULT_NULL (스케줄러에서 메일 제거)
-	if(pMail == NULL || pMail->Payload.DLC == 0){
+	// NULL 메일 → 즉시 반환 (EXIT 블록이 pMail을 역참조하므로 진입 금지)
+	if(pMail == NULL){
+		SendMailboxStep = 0;
+		return RESULT_NULL;
+	}
+	// 페이로드 없는 메일 → RESULT_NULL (스케줄러에서 메일 제거)
+	if(pMail->Payload.DLC == 0){
 		SendMailboxStep = 0;
 		result = RESULT_NULL;
 		goto EXIT;
 	}
-	// LoRa 미연결 또는 Sleep 중 → 일시 정지 (스케줄러에서 대기, 메일 유지)
-	if(!pLoRaDevice->Status.IsJoined || !MiLoRa_IsOpen || pLoRaDevice->Status.IsSleeping){
+	// 메일 변경 감지 — 새 메일이면 전송 상태 초기화
+	// (Sort 재배열·mailbox overflow 슬롯 재사용 대비 포인터+Timestamp 동시 비교.
+	//  Timestamp는 AddItem에서 1회 기록, oTMR_Elapsed는 read-only라 이후 불변)
+	if(pLastMail != pMail || LastMailTimestamp != pMail->Timestamp){
 		SendMailboxStep = 0;
+		pLastMail = pMail;
+		LastMailTimestamp = pMail->Timestamp;
+	}
+	// LoRa 미연결 또는 Sleep 중 → 일시 정지 (스케줄러에서 대기, 메일·진행 상태 유지)
+	// Step을 리셋하지 않음 — 리셋 시 재개할 때 seq 0부터 재시작 + SendErrorCount 소실로
+	// QoS 소진이 불가능해져 무한 재전송 루프에 빠짐 (RadioFailCount 리셋이 항상 선행하므로)
+	if(!pLoRaDevice->Status.IsJoined || !MiLoRa_IsOpen || pLoRaDevice->Status.IsSleeping){
 		result = RESULT_PAUSE;
 		goto EXIT;
 	}
@@ -185,8 +201,8 @@ oResult_t MiLoRa_SendMailbox(IoT_MailboxItem_t *pMail)
 			SendTryCount = 0;
 			SendSqcTimer = oTMR_GetTick(TICKBASE_SYSTICK);
 			break;
-		case 2: // 전송 대기 - 시퀀스 간격 또는 실패 시 백오프 (5초 × SendTryCount)
-			if(SendTryCount == 0 || oTMR_Elapsed(&SendSqcTimer, SECOND_TO_MS(5) * MATH_MAX(SendTryCount, 1), TICKBASE_SYSTICK)){
+		case 2: // 전송 대기 - 첫 시퀀스는 즉시, 이후 시퀀스는 5초 간격 (duty cycle) + 실패 시 5초 × try 백오프
+			if((SendSqcCount == 0 && SendTryCount == 0) || oTMR_Elapsed(&SendSqcTimer, SECOND_TO_MS(5) * MATH_MAX(SendTryCount, 1), TICKBASE_SYSTICK)){
 				SendMailboxStep++;
 				SendTryCount++;
 				SendFaultCount = 0;
@@ -208,10 +224,10 @@ oResult_t MiLoRa_SendMailbox(IoT_MailboxItem_t *pMail)
 				case RESULT_ERROR:	// 전송 실패 → QoS 재시도
 					SendMailboxStep = 2;
 					SendSqcTimer = oTMR_GetTick(TICKBASE_SYSTICK);
-					MiLoRa_RadioFailCount++;	// 누적 5회 초과 시 MiLoRa_Control에서 LoRa 리셋
+					MiLoRa_RadioFailCount++;	// 누적 10회(QoS 5 × 2 seq) 도달 시 MiLoRa_Control에서 LoRa 리셋
 
 					// QoS 횟수만큼 재시도 후 전송된 것으로 간주하고 다음 시퀀스로 이동
-					if(++SendErrorCount >= MATH_MIN(pMail->QoS, 10)){
+					if(++SendErrorCount >= MATH_MIN(pMail->QoS, 30)){
 						SendSqcCount++;
 						SendMailboxStep = 1;
 						oSerial_Log("MiLoRa", "Mailbox sent error");
@@ -219,6 +235,11 @@ oResult_t MiLoRa_SendMailbox(IoT_MailboxItem_t *pMail)
 					break;
 				default:			// 라디오 비정상 응답 (RESULT_NULL, RESULT_FAULT 등)
 					if(++SendFaultCount >= 10){
+						// 무응답 10회 → 현재 시퀀스 포기 + 라디오 재부팅, 재개 시 다음 시퀀스부터
+						// (여기서 seq를 전진시키지 않으면 재부팅 후 같은 seq에서 FAULT 재발 → 무한 재부팅)
+						SendFaultCount = 0;
+						SendSqcCount++;
+						SendMailboxStep = 1;
 						result = RESULT_FAULT;	// 스케줄러에서 MiLoRa_Close() 호출
 						oSerial_Log("MiLoRa", "Mailbox transmit fault");
 					}
@@ -248,7 +269,13 @@ EXIT:
 			pMail->IsBusy = 0;
 			SendMailboxStep = 0;
 			break;
-		case RESULT_FAULT:	// 라디오 Fault → 스케줄러에서 MiLoRa_Close()
+		case RESULT_FAULT:	// 라디오 Fault → 스케줄러에서 MiLoRa_Close(), 재부팅 후 다음 시퀀스부터 재개
+			pMail->IsError = 1;
+			pMail->IsDone = 1;
+			pMail->IsBusy = 0;
+			/* SendMailboxStep 유지 — case 3에서 이미 다음 seq로 전진(Step=1) 상태.
+			 * 리셋하면 재부팅 후 mail 처음부터 재시작 → 무한 재전송 루프 */
+			break;
 		case RESULT_ERROR:	// 인코딩 실패 → 스케줄러에서 재시도 (RadioFailCount로 LoRa 리셋)
 		case RESULT_TIMEOUT:
 			pMail->IsError = 1;
@@ -283,7 +310,7 @@ oResult_t MiLoRa_TimeSync()
 		return RESULT_NULL;
 	}
 
-	oDT_GetNow(&CurrentDT);
+	CurrentDT = oDT_GetNow();
 
 	switch(TimeSyncStep)
 	{
@@ -691,7 +718,7 @@ oResult_t MiLoRa_Open()
  *   Open 조건: 전송할 메일 있음 또는 네트워크 미연결(재접속 필요)
  *   Sleep 조건: 메일 없음 + Open 상태 → AutoSleepDelay 후 Sleep
  *   Wakeup 조건: 메일 있음 → 즉시 Wakeup (debounce 무시)
- * RadioFailCount > 5 → 라디오 이상 → 강제 전원 리셋 */
+ * RadioFailCount >= 10 → 라디오 이상 → 강제 전원 리셋 (QoS 5 기준 시퀀스 2개 실패 주기) */
 void MiLoRa_Control()
 {
 	static oDebounce_t AutoSleepDelay = DEBOUNCE_INITIALIZER(1000, 500);
@@ -735,7 +762,9 @@ void MiLoRa_Control()
 	}
 
 	// 라디오 연속 실패 5회 초과 → 하드웨어 이상 판단, 전원 리셋
-	if(MiLoRa_IsOpen && MiLoRa_RadioFailCount > 5){
+	/* 임계 10 = QoS(5) × 2 seq — 시퀀스 2개 실패마다 재부팅 사이클.
+	 * SendErrorCount(5)가 임계보다 먼저 소진되어야 seq skip이 정상 동작 (5 < 10) */
+	if(MiLoRa_IsOpen && MiLoRa_RadioFailCount >= 10){
 		oSerial_Log("MiLoRa", "Start radio fault reset\r\n");
 		MiLoRa_Close();
 	}

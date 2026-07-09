@@ -8,7 +8,7 @@
 #ifndef INC_ONE_TIME_H_
 #define INC_ONE_TIME_H_
 
-#define ONE_TIME_VERSION		0.1
+#define ONE_TIME_VERSION		0.3
 
 #include "ONE_Common.h"
 
@@ -117,7 +117,7 @@ extern oResult_t oRTC_SetDateAndTime (oDateAndTime_t *pDT);
 
 extern uint32_t oTMR_GetTick(oTickBase_t TickBase);
 extern void oTMR_SetTick(oTickBase_t TickBase, uint32_t Tick);
-extern uint32_t oTMR_Interval(uint32_t Tick1, uint32_t Tick2);
+extern uint32_t oTMR_Interval(uint32_t TickBase, uint32_t TickSub);
 extern uint8_t oTMR_Elapsed(uint32_t *pTimer, uint32_t Interval, oTickBase_t TickBase);
 extern uint32_t oTMR_CountDown(uint32_t *pTimer, uint32_t Count, oTickBase_t TickBase);
 extern uint8_t oTMR_Trigger(uint32_t *pTimer, uint32_t Interval, uint8_t AutoReset, oTickBase_t TickBase);
@@ -126,7 +126,6 @@ extern uint32_t oTMR_Rand(uint32_t *pSeed);
 extern  uint32_t oTMR_RandRange(uint32_t *pSeed, uint32_t Min, uint32_t Max);
 
 extern void oDT_SetNow(oDateAndTime_t *pDT);
-extern void oDT_GetNow(oDateAndTime_t *pDT);
 extern uint32_t oDT_Sub(oDateAndTime_t DT1, oDateAndTime_t DT2);
 extern uint32_t oDT_Add(oDateAndTime_t DT1, oDateAndTime_t DT2);
 extern void oDT_AddYear(oDateAndTime_t *pDT, int32_t Year);
@@ -135,8 +134,7 @@ extern void oDT_AddDay(oDateAndTime_t *pDT, int32_t Day);
 extern void oDT_AddHour(oDateAndTime_t *pDT, int32_t Hour);
 extern void oDT_AddMinute(oDateAndTime_t *pDT, int32_t Minute);
 extern void oDT_AddSec(oDateAndTime_t *pDT, int32_t Sec);
-extern oDateAndTime_t oDT_UpdateNow(void);
-extern void oDT_Reset(oDateAndTime_t *pDT);
+extern oDateAndTime_t oDT_GetNow(void);
 extern uint8_t oDT_IsEmpty(oDateAndTime_t *pDT);
 extern uint8_t oDT_IsTimeOver(oDateAndTime_t *pDT);
 extern uint8_t oDT_ElapsedSec(oDateAndTime_t *pDT, uint32_t Interval);
@@ -153,4 +151,13 @@ extern oDateAndTime_t oDT_FromUnixTime(uint32_t UnixTime);
 
 2026-06-26 | v0.1
 	- baseline (ONE_Time.h)
+2026-07-08 | v0.2
+	- oDT_UpdateNow systick 시간 계산 수정 (잔여 carry %1000, 미세팅·RTC 경로 게이트 정정)
+	- oDT_SetNow가 oDT_UpdateTimestamp 앵커 동기화 (늦은 세팅 점프 제거)
+	- oTMR_Interval 파라미터명 TickBase/TickSub 명확화
+2026-07-08 | v0.3
+	- DT 인터페이스 정리: 시간 취득을 oDT_GetNow(void) 값 반환으로 통합
+	  (oDT_UpdateNow → oDT_GetNow로 흡수, 옛 oDT_GetNow(oDateAndTime_t*)·oDT_Reset 제거)
+	- 내부 caller(oDT_ElapsedSec/Min)를 *pDT = oDT_GetNow()로 갱신
+	- ※ API 변경: 호출부 oDT_GetNow(&x) → x = oDT_GetNow()로 수정 필요
 */

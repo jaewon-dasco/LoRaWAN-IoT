@@ -109,7 +109,7 @@ oResult_t MiSerial_Set(char *Message)
 				if(len > 0 && len < sizeof(MiIoT_Parameter.Information.SerialNo)){
 					if(strncmp(MiIoT_Parameter.Information.SerialNo, StrVal, len) != 0){
 						memset(MiIoT_Parameter.Information.SerialNo, 0, sizeof(MiIoT_Parameter.Information.SerialNo));
-						strncpy(MiIoT_Parameter.Information.SerialNo, StrVal, len);
+						memcpy(MiIoT_Parameter.Information.SerialNo, StrVal, len);   /* len < sizeof + memset(0) 선행 → 널 종료 보장 (strncpy truncation 경고 회피) */
 						MiIoT_Status.IsUpdateInformation = 0;
 					}
 				}

@@ -8,7 +8,7 @@
 #ifndef INC_MI_IOT_H_
 #define INC_MI_IOT_H_
 
-#define MI_IOT_VERSION		0.4
+#define MI_IOT_VERSION		0.5
 
 #include "ONE_Time.h"
 #include "ONE_Signal.h"
@@ -534,4 +534,10 @@ extern void MiIoT();
 	  · case 0에서 holdoff 리셋 — 정상 측정 흐름(첫 진입·OK 재진입)은 지연 없음
 	- MiIoT_UpdatePeriod 내부 명명 정리: MiIoT_MeasurementStep/MeasurementStarted/MeasurementPeriodOk
 	  → UpdatePeriodStep/UpdatePeriodStarted/UpdatedPeriod_IsOk
+2026-07-08 | v0.5
+	- MiIoT_UpdatePeriod 세션 중 시리얼 샘플링 명령 무시 (Mi_IoT.c):
+	  · UpdatePeriodStep > 0 동안 MiSerial_SamplingSensorCmd/StopSensorCmd 강제 클리어
+	  · Measurement_Sensor 조기 종료로 미완성 패킷이 전송되던 경로 차단
+	  · SIV100 b0a2a84 원본, 공용 Mi_IoT.c 전 디바이스 동기화 흐름
+	- 3면 정합 정정 (매크로/History만 승격, .c는 이미 v0.5로 기재됨 in 858d8fe)
 */

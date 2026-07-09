@@ -1,7 +1,7 @@
 /*
  * Mi_Storage.c
  *
- *  Version: 0.1 (2026-06-29)
+ *  Version: 0.11 (2026-07-08)
  */
 #include "ONE_Memory.h"
 #include "Mi_IoT.h"
@@ -260,7 +260,7 @@ oResult_t MiStorage_Write(uint32_t Address, uint8_t *pData, uint32_t SizeOfData)
 				WriteStep++;
 			} // @suppress("No break at end of case")
 		case 3:
-			Header.UnixTime = oDT_ToUnixTime(oDT_UpdateNow());
+			Header.UnixTime = oDT_ToUnixTime(oDT_GetNow());
 			Header.Sign = MISTORAGE_DATAFRAME_SIGN;
 			Header.DLC = SizeOfData;
 			Header.CRCValue = oMEM_CRC32(pData, SizeOfData, 0);
@@ -350,10 +350,8 @@ oResult_t MiStorage_ReadIoTParameter(IoTParameter_t *pParameter)
 				oSerial_Log("MiStorage", "ReadParam NAND OK (%d pages)", NandPageIndex);
 			}
 			else if(result != RESULT_RUN){
-				if(result == RESULT_FAULT){
-					MiStorage_NandHeader.Status.IsFault = 0;
-				}
-				oSerial_Log("MiStorage", "ReadParam NAND FAIL(%d)->MCU fallback", result);
+				oSerial_Log("MiStorage", "ReadParam NAND %s(%d)->MCU fallback",
+					(result == RESULT_FAULT) ? "FAULT(latched)" : "FAIL", result);
 				NandReadFailed = 1;
 				ReadParameterStep = 2;
 				result = RESULT_RUN;
@@ -395,10 +393,8 @@ oResult_t MiStorage_ReadIoTParameter(IoTParameter_t *pParameter)
 				oSerial_Log("MiStorage", "ReadParam NAND restored (%d pages)", NandPageIndex);
 			}
 			else if(result != RESULT_RUN){
-				if(result == RESULT_FAULT){
-					MiStorage_NandHeader.Status.IsFault = 0;
-				}
-				oSerial_Log("MiStorage", "ReadParam NAND restore FAIL(%d)", result);
+				oSerial_Log("MiStorage", "ReadParam NAND restore %s(%d)",
+					(result == RESULT_FAULT) ? "FAULT(latched)" : "FAIL", result);
 				result = RESULT_OK;
 			}
 			break;
@@ -463,8 +459,7 @@ oResult_t MiStorage_WriteIoTParameter(IoTParameter_t *pParameter)
 						oSerial_Log("MiStorage", "WriteParam NAND OK (%d pages)", NandPageIndex);
 					}
 					else if(result == RESULT_FAULT){
-						MiStorage_NandHeader.Status.IsFault = 0;
-						oSerial_Log("MiStorage", "WriteParam NAND FAULT->recovered");
+						oSerial_Log("MiStorage", "WriteParam NAND FAULT(latched)->MCU only");
 					}
 					else{
 						oSerial_Log("MiStorage", "WriteParam NAND ERR(%d) pg=%d", result, NandPageIndex);
@@ -566,7 +561,7 @@ oResult_t MiStorage_WriteIoTData(IoT_DataPacket_t* pPayload)
 
 	if((result=MiStorage_Write(Address, (uint8_t *)pPayload, sizeof(IoT_DataPacket_t))) == RESULT_OK){
 		MiStorage_NandHeader.SensorData.NewerAddress = Address;
-		oDT_GetNow(&MiStorage_NandHeader.SensorData.NewerDateTime);
+		MiStorage_NandHeader.SensorData.NewerDateTime = oDT_GetNow();
 		oSerial_Log("MiStorage", "WriteData OK Adr=%u Cnt=%d", Address, MiStorage_NandHeader.SensorData.CountOfData);
 	}
 	else if(result != RESULT_RUN){

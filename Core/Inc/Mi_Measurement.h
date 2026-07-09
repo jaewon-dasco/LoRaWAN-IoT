@@ -8,7 +8,7 @@
 #ifndef INC_MI_MEASUREMENT_H_
 #define INC_MI_MEASUREMENT_H_
 
-#define MI_MEASUREMENT_VERSION		0.2
+#define MI_MEASUREMENT_VERSION		0.3
 
 #include "Mi_LoRa.h"
 #include "Mi_IoT.h"
@@ -57,4 +57,13 @@ extern oResult_t Measurement_Supply(uint8_t Count);
 	    (MAX_COUNT=30, 배열 [30] 유효 0~29 — <= 는 인덱스 30 통과 시
 	     TiltArray.Dual[30].AxisX/Y 또는 Single[30].Axis 쓰기로 인접 필드
 	     CountOfArraySensor·Analog 영역 오염 유발)
+2026-07-08 | v0.3
+	- CH2 Analog CurrentModeEnable 제어 추가 (mA=HIGH, mV=LOW):
+	  · Measurement_Sensor case 2 PowerOn OK 직후 pConfig->TypeOfSensor == IoTSensorType_mA
+	    이면 GPIOs.DO.CurrentModeEnable = 1 세팅 (case 3 warmup 200ms가 settling 커버)
+	  · Measurement_Sensor 최종 EXIT 블록에 GPIOs.DO.CurrentModeEnable = 0 세팅
+	    (세션 종료 시 Measurement_PowerOn(-1) 옆에서 함께 리셋)
+	  · 모드 핀은 PowerOn 책임 밖 — PowerOn은 채널 전원만 관장,
+	    상위(Measurement_Sensor)가 모드 세팅/해제 책임
+	  · 기존: 초기화 후 아무도 CurrentModeEnable을 쓰지 않아 config 무시되고 초기 IO_HIGH 고정
 */

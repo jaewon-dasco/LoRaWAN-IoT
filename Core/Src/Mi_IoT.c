@@ -280,7 +280,7 @@ uint8_t MiIoT_IsSamplingTime()
 
 	if(((HOUR_TO_TOTAL_MINUTE(MiIoT_DT)+OffsetMinute) % MiIoT_Parameter.Operating.SamplingInterval) == 0){
 		if(TimeToSampling == 0){
-			oDT_GetNow(&MiIoT_MeasurementDT);
+			MiIoT_MeasurementDT = oDT_GetNow();
 			oDT_AddMinute(&MiIoT_MeasurementDT, OffsetMinute);
 
 			MiIoT_MeasurementDT.Second = 0;
@@ -659,7 +659,7 @@ void MiIoT_Sleep()
 
 void MiIoT(UART_HandleTypeDef *pLoRaUART)
 {
-	oDT_GetNow(&MiIoT_DT);
+	MiIoT_DT = oDT_GetNow();
 	oTrigger(&MiIoT_USBConnectTrig, GPIOs.DI.UsbConnected);
 
 	MiLoRa(pLoRaUART);

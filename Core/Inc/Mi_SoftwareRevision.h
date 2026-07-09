@@ -10,7 +10,7 @@
 
 #include "Mi_Main.h"
 
-#define MI_SW_REVISION				1.13
+#define MI_SW_REVISION				1.14
 
 /* History
 
@@ -195,6 +195,52 @@
 	  · SIC100은 FW 0.96부터 fPort 101 통합 페이로드(DataArray_Type2) 사용
 	  · NAND 저장 관문(MiStorage_WriteIoTData)이 현행 페이로드를 인정하도록 (잠재 지뢰 제거)
 	  · 이력 위치 이동: 공유 Mi_IoT.h → 본 파일 (공유 헤더에 제품 전용 이력 미기재 규약)
+2026-07-08 | HW 2.4 | FW 1.14
+	- 정밀 감사 1단계 + 2단계 반영 (5개 영역 감사 결과 필터링, 실제 문제만 조치):
+	- Mi_Measurement v0.2 → v0.3 (CH2 CurrentModeEnable 제어 추가):
+	  · Measurement_Sensor case 2 PowerOn OK 직후 pConfig->TypeOfSensor == IoTSensorType_mA
+	    이면 GPIOs.DO.CurrentModeEnable = 1 세팅 (극성: mA=HIGH, mV=LOW)
+	  · Measurement_Sensor 최종 EXIT에서 GPIOs.DO.CurrentModeEnable = 0 세팅
+	    (PowerOn(-1) 옆, 세션 종료 시 모드 리셋)
+	  · 모드 핀은 PowerOn 책임 밖 — PowerOn은 채널 전원만 관장
+	  · 기존: 초기 IO_HIGH 고정 → mV/mA config 무관하게 단일 모드 동작 (실측 오류)
+	  · case 3 warmup 200ms가 모드 스위치 settling 커버
+	- Mi_IoT v0.4 → v0.5 (3면 정합 정정, SIC100 사본):
+	  · MI_IOT_VERSION 매크로 0.4 → 0.5, History에 v0.5 항목 추가
+	  · 858d8fe 커밋(SIV100 b0a2a84 원본)의 UpdatePeriod cmd clear 가드가 .c만 v0.5 표기되고
+	    .h 매크로/History가 v0.4에 머물던 규칙 위반 해소
+	  · 99_Common canonical + 다른 5개 IoT 프로젝트 동기화는 별도 세션에서 진행
+	- Mi_Storage v0.1 → v0.11 (NAND IsFault latch 유지 + 파일 헤더 정합):
+	  · ReadIoTParameter case 1/3, WriteIoTParameter case 1의 RESULT_FAULT 분기에서
+	    MiStorage_NandHeader.Status.IsFault = 0 부당 클리어 삭제 (3개소)
+	  · 기존: FAULT 발생 즉시 latch 파괴 → NAND 재시도 반복 + StorageError 은폐
+	  · 수정 후: latch 유지 → 후속 Read/Write는 skip 경로 → MCU 내부 플래시 fallback만 사용
+	  · 로그 문구를 "FAULT(latched)"로 정정
+	  · 파일 헤더 Version 배너 추가 (v0.98 형식 통일 시 누락)
+	- Mi_LoRa v0.11 → v0.12 (inter-sequence duty cycle 보장 — 정밀 감사 2단계):
+	  · case 2, line 189: SendTryCount==0 시 즉시 진행 → 연속 시퀀스 back-to-back 송신
+	    → EU868 duty cycle 위반 위험
+	  · 수정: (SendSqcCount==0 && SendTryCount==0) 첫 시퀀스만 즉시, 이후 5s 최소 대기
+	- 감사 오탐 확정 (조치 없음, 원본 유지):
+	  · P1: (uint16_t)(MI_SW_REVISION*100) 부동소수 버림은 의도된 동작 (사용자 확인)
+	  · P2: SINGLE_FIRST=13/NEXT=14는 서버 codec R14와 정합 (line 454-455 firstCnt=13/nextCnt=14)
+	  · P4(QoS=0 즉시 skip): 1회 전송 후 skip이 의도된 동작 (사용자 확인)
+	- Mi_LoRa v0.12 → v0.13 (SendMailbox 무한 재전송 루프 수정):
+	  · 결함: 전송 영구 실패 시 RadioFailCount(>5) 재부팅이 SendErrorCount(10) 소진보다
+	    항상 선행 → PAUSE Step=0 리셋 → ErrorCount 소실 → seq skip 불가 → seq 0 무한 반복
+	    (측정 mail QoS_MAX 전용 결함 — Status mail QoS=1은 첫 실패에 즉시 skip되어 무관)
+	  · 설계 의도 복원: seq당 QoS회 시도 → skip, 누적 10회 실패마다 재부팅 후 다음 seq부터
+	    이어서, 마지막 seq까지 소진 시 mail 삭제 (유한 종결 보장)
+	  · PAUSE·FAULT 시 SendMailboxStep 유지 + 메일 신원 감지(pLastMail+Timestamp) 신설
+	  · FAULT(무응답 10회) 시 해당 seq 포기 후 전진 (재부팅 후 같은 seq 무한 FAULT 방지)
+	  · MiLoRa_Control 재부팅 임계 >5 → >=10 (QoS 5 × 2 seq 주기)
+	  · seq당 QoS 재시도 상한 10 → 30 (Step 유지로 재부팅 사이에도 ErrorCount 연속 축적 → 유한 종결 유지)
+	  · NULL 메일 가드 즉시 return (기존 goto EXIT는 pMail->Result NULL 역참조 잠복 크래시)
+	- ONE_Time v0.1 → v0.3 동기화 (100_Library canonical, SIA100_VB 발원):
+	  · oDT_GetNow(pDT) → oDateAndTime_t oDT_GetNow(void) 값 반환 API로 변경 (oDT_UpdateNow 통합)
+	  · 호출부 마이그레이션: Mi_IoT.c(2곳)·Mi_Storage.c(2곳)·Mi_LoRa.c(1곳)·Mi_Serial.c
+	- Mi_IoT.c·Mi_Storage.c 한글 주석 인코딩 손상(mojibake) 복구:
+	  · 타 세션 편집 중 CP949 왕복 사고로 BOM+mojibake 발생 → HEAD 정상본 복원 후 실코드 변경만 재적용
 2026-07-08 | HW 2.4 | FW 1.13
 	- Mi_Main v0.31 → v0.4 (재측정 로직 Best 값 합성 복원):
 	  · MiMain_GetMeasureStableData(pReference, pBest, pSampling) 신규 —

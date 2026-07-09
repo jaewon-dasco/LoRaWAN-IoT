@@ -8,7 +8,7 @@
 #ifndef INC_MI_STORAGE_H_
 #define INC_MI_STORAGE_H_
 
-#define MI_STORAGE_VERSION		0.1
+#define MI_STORAGE_VERSION		0.11
 
 #include "Mi_Main.h"
 #include "NAND_MT29F2G01ABAGDWB_IT.h"
@@ -79,4 +79,12 @@ extern void MiStorage();
 
 2026-06-26 | v0.1
 	- baseline (Mi_Storage.h)
+2026-07-08 | v0.11
+	- Mi_Storage.c: NAND IsFault latch 유지 (부당 클리어 제거):
+	  · ReadIoTParameter case 1/3, WriteIoTParameter case 1의 RESULT_FAULT 분기에서
+	    MiStorage_NandHeader.Status.IsFault = 0 문장 삭제
+	  · 기존: FAULT 발생 즉시 latch 파괴 → 다음 세션에도 NAND 재시도 반복 + StorageError 은폐
+	  · 수정 후: NAND HW fault 발생 시 IsFault 유지 → 후속 Read/Write는 IsFault skip 경로로 진입
+	    → MCU 내부 플래시 fallback만 사용, 로그 문구를 "FAULT(latched)"로 정정
+	- Mi_Storage.c: 파일 헤더 Version 배너 추가 (v0.98 형식 통일 시 누락되었던 항목)
 */
