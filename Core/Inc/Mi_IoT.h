@@ -8,7 +8,7 @@
 #ifndef INC_MI_IOT_H_
 #define INC_MI_IOT_H_
 
-#define MI_IOT_VERSION		0.5
+#define MI_IOT_VERSION		0.51
 
 #include "ONE_Time.h"
 #include "ONE_Signal.h"
@@ -102,6 +102,7 @@ typedef enum{
 	IoTProductType_SIM100_6C		 	= 4,
 	IoTProductType_SIA100_SD		 	= 5,
 	IoTProductType_VMX3264			 	= 6,
+	IoTProductType_SIA100_VB		 	= 7,
 	IoTProductType_Max		 			= 255,
 }IoTProductType_t;
 
@@ -540,4 +541,8 @@ extern void MiIoT();
 	  · Measurement_Sensor 조기 종료로 미완성 패킷이 전송되던 경로 차단
 	  · SIV100 b0a2a84 원본, 공용 Mi_IoT.c 전 디바이스 동기화 흐름
 	- 3면 정합 정정 (매크로/History만 승격, .c는 이미 v0.5로 기재됨 in 858d8fe)
+2026-07-09 | v0.51
+	- IoTProductType_t에 IoTProductType_SIA100_VB = 7 복원:
+	  · 98_PHM 사본에만 존재하고 마스터에는 없던 값 (Mi_IoT_PHM.c가 실사용 중) —
+	    전 디바이스 공용파일 동기화 전 마스터에 병합 (누락 상태로는 PHM 동기화 시 빌드 파괴)
 */
